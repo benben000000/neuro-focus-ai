@@ -207,8 +207,8 @@ export function Profile() {
                         <Clock size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Study Hours</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">0.0h</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Birthday</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">{profile?.birthday ? new Date(profile.birthday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Not set'}</p>
                     </div>
                 </div>
 
@@ -216,9 +216,9 @@ export function Profile() {
                     <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl">
                         <BookOpen size={24} />
                     </div>
-                    <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Sessions</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">0</p>
+                    <div className="overflow-hidden">
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">University</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white truncate">{profile?.university || 'Not set'}</p>
                     </div>
                 </div>
             </div>

@@ -122,14 +122,22 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
 
 // --- STORY FUNCTIONS ---
 
-export const createStory = async (story: Omit<Story, 'id' | 'createdAt' | 'expiresAt'>) => {
-    const storiesRef = collection(db, 'stories');
-    const now = Date.now();
-    await addDoc(storiesRef, {
-        ...story,
-        createdAt: now,
-        expiresAt: now + (24 * 60 * 60 * 1000) // 24 hours
-    });
+export const createStory = async (
+    story: Omit<Story, 'id' | 'createdAt' | 'expiresAt'>
+): Promise<string> => {
+    try {
+        const storiesRef = collection(db, 'stories');
+        const now = Date.now();
+        const docRef = await addDoc(storiesRef, {
+            ...story,
+            createdAt: now,
+            expiresAt: now + (24 * 60 * 60 * 1000) // 24 hours
+        });
+        return docRef.id;
+    } catch (error: any) {
+        console.error('createStory failed', error);
+        throw new Error(error?.message || 'Failed to publish story.');
+    }
 };
 
 export const getStories = async () => {
@@ -162,14 +170,22 @@ export const subscribeToStories = (callback: (stories: Story[]) => void) => {
 
 // --- FEED FUNCTIONS ---
 
-export const createPost = async (post: Omit<SocialPost, 'id' | 'createdAt' | 'likes'>) => {
-    const postsRef = collection(db, 'posts');
-    await addDoc(postsRef, {
-        ...post,
-        likes: 0,
-        likedBy: [],
-        createdAt: Date.now()
-    });
+export const createPost = async (
+    post: Omit<SocialPost, 'id' | 'createdAt' | 'likes'>
+): Promise<string> => {
+    try {
+        const postsRef = collection(db, 'posts');
+        const docRef = await addDoc(postsRef, {
+            ...post,
+            likes: 0,
+            likedBy: [],
+            createdAt: Date.now()
+        });
+        return docRef.id;
+    } catch (error: any) {
+        console.error('createPost failed', error);
+        throw new Error(error?.message || 'Failed to publish post.');
+    }
 };
 
 export const toggleLike = async (postId: string, userId: string) => {

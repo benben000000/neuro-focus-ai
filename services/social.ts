@@ -23,6 +23,9 @@ export interface UserProfile {
     email: string;
     photoURL?: string;
     bio?: string;
+    birthday?: string;
+    university?: string;
+    hasCompletedOnboarding: boolean;
     level: number;
     xp: number;
     joinedAt: string;
@@ -90,6 +93,9 @@ export const createUserProfile = async (user: any) => {
             email: user.email,
             photoURL: user.photoURL || '',
             bio: 'Ready to learn!',
+            birthday: '',
+            university: '',
+            hasCompletedOnboarding: false,
             level: 1,
             xp: 0,
             joinedAt: new Date().toISOString()
@@ -104,7 +110,12 @@ export const getUserProfile = async (uid: string) => {
     const userRef = doc(db, 'users', uid);
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
-        return userSnap.data() as UserProfile;
+        const profile = userSnap.data() as UserProfile;
+        // Ensure backward compatibility for existing users
+        if (profile.hasCompletedOnboarding === undefined) {
+            profile.hasCompletedOnboarding = true; // Assume existing users have completed onboarding
+        }
+        return profile;
     }
     return null;
 };

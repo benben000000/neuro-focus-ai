@@ -15,14 +15,56 @@ import { logSession } from './services/learning';
 import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
+import { OnboardingFlow } from './components/OnboardingFlow';
+import { getUserProfile } from './services/social';
 
 // Private Route Wrapper
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+function PrivateRoute({ children, requireOnboarding = true }: { children: React.ReactNode; requireOnboarding?: boolean }) {
   const { currentUser, loading } = useAuth();
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
+  const location = useLocation();
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (currentUser && requireOnboarding && location.pathname !== '/onboarding') {
+        try {
+          const profile = await getUserProfile(currentUser.uid);
+          if (profile) {
+            setHasCompletedOnboarding(profile.hasCompletedOnboarding);
+          }
+        } catch (error) {
+          console.error('Error checking onboarding status:', error);
+        } finally {
+          setProfileLoading(false);
+        }
+      } else {
+        setProfileLoading(false);
+      }
+    };
 
-  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+    if (currentUser) {
+      checkOnboardingStatus();
+    } else {
+      setProfileLoading(false);
+    }
+  }, [currentUser, requireOnboarding, location.pathname]);
+
+  if (loading || profileLoading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
+
+  if (!currentUser) return <Navigate to="/login" />;
+
+  // Redirect to onboarding if not completed and onboarding is required
+  if (requireOnboarding && !hasCompletedOnboarding && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" />;
+  }
+
+  // If on onboarding page and already completed, redirect to dashboard
+  if (location.pathname === '/onboarding' && hasCompletedOnboarding) {
+    return <Navigate to="/dashboard" />;
+  }
+
+  return <>{children}</>;
 }
 
 function AppContent() {
@@ -114,11 +156,20 @@ function AppContent() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Onboarding route - doesn't require onboarding completion */}
+        <Route path="/onboarding" element={
+          <PrivateRoute requireOnboarding={false}>
+            <OnboardingFlow />
+          </PrivateRoute>
+        } />
+
+        {/* Protected routes that require onboarding completion */}
         <Route path="/" element={
           <PrivateRoute>
             <Layout theme={theme} toggleTheme={toggleTheme} onStartVoice={() => setIsVoiceMode(true)} />
           </PrivateRoute>
         }>
+          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={
             <Dashboard
               attachments={attachments}

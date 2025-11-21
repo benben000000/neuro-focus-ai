@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserProfile, updateUserProfile, UserProfile } from '../services/social';
-import { User, Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, Calendar, GraduationCap } from 'lucide-react';
 
 export function Profile() {
     const { currentUser } = useAuth();
@@ -10,6 +10,8 @@ export function Profile() {
     const [editName, setEditName] = useState('');
     const [editBio, setEditBio] = useState('');
     const [editPhotoURL, setEditPhotoURL] = useState('');
+    const [editBirthday, setEditBirthday] = useState('');
+    const [editUniversity, setEditUniversity] = useState('');
     const [loading, setLoading] = useState(true);
     const [saveLoading, setSaveLoading] = useState(false);
     const [error, setError] = useState('');
@@ -29,6 +31,8 @@ export function Profile() {
             setEditName(data.displayName);
             setEditBio(data.bio || '');
             setEditPhotoURL(data.photoURL || '');
+            setEditBirthday(data.birthday || '');
+            setEditUniversity(data.university || '');
         }
         setLoading(false);
     };
@@ -48,7 +52,9 @@ export function Profile() {
             const updatedProfile = {
                 displayName: editName,
                 bio: editBio,
-                photoURL: editPhotoURL
+                photoURL: editPhotoURL,
+                birthday: editBirthday,
+                university: editUniversity
             };
             
             console.log('Saving profile data:', updatedProfile);
@@ -82,6 +88,8 @@ export function Profile() {
             setEditName(profile.displayName);
             setEditBio(profile.bio || '');
             setEditPhotoURL(profile.photoURL || '');
+            setEditBirthday(profile.birthday || '');
+            setEditUniversity(profile.university || '');
             setError('');
             setSuccess('');
         }
@@ -160,11 +168,53 @@ export function Profile() {
                                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 h-20 resize-none"
                                     placeholder="Tell us about yourself..."
                                 />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                            <Calendar size={16} />
+                                            Birthday
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={editBirthday}
+                                            onChange={(e) => setEditBirthday(e.target.value)}
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                                            max={new Date().toISOString().split('T')[0]}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                            <GraduationCap size={16} />
+                                            University
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={editUniversity}
+                                            onChange={(e) => setEditUniversity(e.target.value)}
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                                            placeholder="University name"
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         ) : (
                             <div>
                                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{profile?.displayName}</h1>
-                                <p className="text-slate-500 dark:text-slate-400 max-w-xl">{profile?.bio || "No bio yet."}</p>
+                                <p className="text-slate-500 dark:text-slate-400 max-w-xl mb-4">{profile?.bio || "No bio yet."}</p>
+                                <div className="flex flex-wrap gap-4 text-sm">
+                                    {profile?.birthday && (
+                                        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                            <Calendar size={16} />
+                                            <span>{new Date(profile.birthday).toLocaleDateString()}</span>
+                                        </div>
+                                    )}
+                                    {profile?.university && (
+                                        <div className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                                            <GraduationCap size={16} />
+                                            <span>{profile.university}</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useProfile } from '../contexts/ProfileContext';
 import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
 import { StoryTray } from './StoryTray';
@@ -17,6 +18,7 @@ const timeAgo = (timestamp: number) => {
 
 export function SocialFeed() {
     const { currentUser } = useAuth();
+    const { profile } = useProfile();
     const [posts, setPosts] = useState<SocialPost[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -72,7 +74,7 @@ export function SocialFeed() {
                     className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                        {currentUser?.photoURL && <img src={currentUser.photoURL} className="w-full h-full object-cover" />}
+                        {profile?.photoURL && <img src={profile.photoURL} className="w-full h-full object-cover" />}
                     </div>
                     <div className="flex-1 text-slate-400 text-sm font-medium">What's on your mind?</div>
                     <PlusSquare className="text-indigo-600" />
@@ -171,10 +173,10 @@ export function SocialFeed() {
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
                         <div className="w-14 h-14 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                            {currentUser?.photoURL && <img src={currentUser.photoURL} className="w-full h-full object-cover" />}
+                            {profile?.photoURL && <img src={profile.photoURL} className="w-full h-full object-cover" />}
                         </div>
                         <div>
-                            <p className="font-bold text-slate-900 dark:text-white">{currentUser?.displayName || 'Student'}</p>
+                            <p className="font-bold text-slate-900 dark:text-white">{profile?.displayName || 'Student'}</p>
                             <p className="text-sm text-slate-500">{currentUser?.email}</p>
                         </div>
                     </div>

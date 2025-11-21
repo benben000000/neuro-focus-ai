@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { getUserProfile, createUserProfile, UserProfile } from '../services/social';
+import { getUserProfile, createUserProfile, UserProfile, subscribeToUserProfile } from '../services/social';
 
 interface ProfileContextType {
     profile: UserProfile | null;
@@ -46,8 +46,22 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     };
 
     useEffect(() => {
+        if (!currentUser) {
+            setProfile(null);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         loadProfile();
+
+        // Subscribe to real-time updates
+        const unsubscribe = subscribeToUserProfile(currentUser.uid, (updatedProfile) => {
+            setProfile(updatedProfile);
+            setLoading(false);
+        });
+
+        return unsubscribe;
     }, [currentUser?.uid]);
 
     const refreshProfile = async () => {

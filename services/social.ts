@@ -14,7 +14,8 @@ import {
     updateDoc,
     arrayUnion
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { updateProfile } from 'firebase/auth';
+import { db, auth } from './firebase';
 
 // --- TYPES ---
 export interface UserProfile {
@@ -118,6 +119,38 @@ export const getUserProfile = async (uid: string) => {
 export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
     const userRef = doc(db, 'users', uid);
     await updateDoc(userRef, data);
+    
+    // Also update Firebase Auth profile
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+        const updateData: any = {};
+        if (data.displayName) {
+            updateData.displayName = data.displayName;
+        }
+        if (data.photoURL !== undefined) {
+            updateData.photoURL = data.photoURL;
+        }
+        
+        if (Object.keys(updateData).length > 0) {
+            await updateProfile(currentUser, updateData);
+        }
+    }
+};
+
+export const subscribeToUserProfile = (uid: string, callback: (profile: UserProfile | null) => void) => {
+    const userRef = doc(db, 'users', uid);
+    
+    const unsubscribe = onSnapshot(userRef, (snapshot) => {
+        if (snapshot.exists()) {
+            callback(snapshot.data() as UserProfile);
+        } else {
+            callback(null);
+        }
+    }, (error) => {
+        console.error('Error subscribing to profile:', error);
+    });
+    
+    return unsubscribe;
 };
 
 // --- STORY FUNCTIONS ---

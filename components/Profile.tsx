@@ -1,16 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserProfile, updateUserProfile, UserProfile } from '../services/social';
+import { useProfile } from '../contexts/ProfileContext';
+import { updateUserProfile } from '../services/social';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle } from 'lucide-react';
 
 export function Profile() {
     const { currentUser } = useAuth();
-    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const { profile, loading: profileLoading, refreshProfile } = useProfile();
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [editBio, setEditBio] = useState('');
     const [editPhotoURL, setEditPhotoURL] = useState('');
-    const [loading, setLoading] = useState(true);
     const [saveLoading, setSaveLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
@@ -51,37 +51,17 @@ export function Profile() {
         errorTimeoutRef.current = setTimeout(() => setError(''), 5000);
     };
 
-    const hydrateEditFields = (profileData: UserProfile) => {
+    const hydrateEditFields = (profileData: any) => {
         setEditName(profileData.displayName || '');
         setEditBio(profileData.bio || '');
         setEditPhotoURL(profileData.photoURL || '');
     };
 
-    const loadProfile = async () => {
-        if (!currentUser) return;
-        try {
-            const data = await getUserProfile(currentUser.uid);
-            if (data) {
-                setProfile(data);
-                hydrateEditFields(data);
-            }
-        } catch (err) {
-            console.error('Error loading profile:', err);
-            showErrorMessage('Unable to load your profile. Please refresh.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
-        if (!currentUser) {
-            setProfile(null);
-            setLoading(false);
-            return;
+        if (profile && !isEditing) {
+            hydrateEditFields(profile);
         }
-        setLoading(true);
-        loadProfile();
-    }, [currentUser]);
+    }, [profile]);
 
     useEffect(() => {
         return () => {
@@ -111,10 +91,7 @@ export function Profile() {
 
         try {
             await updateUserProfile(currentUser.uid, updatedProfile);
-            setProfile(prev => (prev ? { ...prev, ...updatedProfile } : prev));
-            setEditName(updatedProfile.displayName);
-            setEditBio(updatedProfile.bio || '');
-            setEditPhotoURL(updatedProfile.photoURL || '');
+            await refreshProfile();
             setIsEditing(false);
             showSuccessMessage('Profile updated successfully!');
         } catch (err) {
@@ -134,7 +111,7 @@ export function Profile() {
 
     const isSaveDisabled = saveLoading || (isEditing && !editName.trim());
 
-    if (loading) return <div className="p-8 text-center">Loading profile...</div>;
+    if (profileLoading) return <div className="p-8 text-center">Loading profile...</div>;
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">

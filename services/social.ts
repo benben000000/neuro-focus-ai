@@ -28,6 +28,7 @@ export interface UserProfile {
     joinedAt: string;
     friends?: string[]; // List of friend UIDs
     friendRequests?: string[]; // List of UIDs who sent requests
+    hasCompletedOnboarding?: boolean;
 }
 
 export interface SocialPost {
@@ -92,7 +93,8 @@ export const createUserProfile = async (user: any) => {
             bio: 'Ready to learn!',
             level: 1,
             xp: 0,
-            joinedAt: new Date().toISOString()
+            joinedAt: new Date().toISOString(),
+            hasCompletedOnboarding: false
         };
         await setDoc(userRef, newProfile);
         return newProfile;

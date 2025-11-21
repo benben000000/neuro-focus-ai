@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Upload, X, FileText, Image as ImageIcon, FileType, Presentation, File } from 'lucide-react';
+import { Upload, X, FileText, Image as ImageIcon, FileType, Presentation, File, Edit3 } from 'lucide-react';
 import { FileAttachment } from '../types';
+import { ImageEditor } from './ImageEditor';
 
 interface FileUploaderProps {
   onFilesSelected: (files: FileAttachment[]) => void;
@@ -11,6 +12,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFilesSelected, com
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [imageToEdit, setImageToEdit] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   // Removed Office types as they cause API 400 errors with Gemini inlineData
   const allowedTypes = [
@@ -22,7 +25,20 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFilesSelected, com
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      await processFiles(Array.from(e.target.files));
+      const files: File[] = Array.from(e.target.files);
+      
+      // Check if first file is an image
+      if (files.length > 0 && files[0].type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setImageToEdit(event.target?.result as string);
+          setPendingFiles(files);
+        };
+        reader.readAsDataURL(files[0]);
+      } else {
+        await processFiles(files);
+      }
+      
       if (inputRef.current) inputRef.current.value = '';
     }
   };
@@ -64,6 +80,47 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFilesSelected, com
     });
   };
 
+  const handleImageEditorSave = async (editedDataUrl: string) => {
+    const processed: FileAttachment[] = [];
+    
+    // Process the edited image
+    const base64Data = editedDataUrl.split(',')[1];
+    processed.push({
+      name: pendingFiles[0]?.name || 'image.jpg',
+      mimeType: 'image/jpeg',
+      data: base64Data
+    });
+    
+    // Process remaining non-image files
+    if (pendingFiles.length > 1) {
+      for (let i = 1; i < pendingFiles.length; i++) {
+        const file = pendingFiles[i];
+        if (!file.type.startsWith('image/')) {
+          try {
+            const base64 = await fileToBase64(file);
+            const base64WithoutHeader = base64.split(',')[1];
+            processed.push({
+              name: file.name,
+              mimeType: file.type,
+              data: base64WithoutHeader
+            });
+          } catch (err) {
+            console.error("Error processing file", err);
+          }
+        }
+      }
+    }
+    
+    onFilesSelected(processed);
+    setImageToEdit(null);
+    setPendingFiles([]);
+  };
+
+  const handleImageEditorCancel = () => {
+    setImageToEdit(null);
+    setPendingFiles([]);
+  };
+
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -83,7 +140,16 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFilesSelected, com
   };
 
   return (
-    <div className="w-full">
+    <>
+      {imageToEdit && (
+        <ImageEditor
+          imageDataUrl={imageToEdit}
+          onSave={handleImageEditorSave}
+          onCancel={handleImageEditorCancel}
+        />
+      )}
+      {!imageToEdit && (
+      <div className="w-full">
       <div 
         className={`relative border-2 border-dashed rounded-xl transition-colors cursor-pointer group
           ${isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'}
@@ -131,6 +197,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({ onFilesSelected, com
           onChange={handleFileChange}
         />
       </div>
-    </div>
+      </div>
+      )}
+    </>
   );
 };

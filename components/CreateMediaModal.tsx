@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { X, Image as ImageIcon, Send, Camera } from 'lucide-react';
+import { X, Image as ImageIcon, Send, Camera, Edit3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { createPost, createStory, getUserProfile } from '../services/social';
+import { ImageEditor } from './ImageEditor';
 
 interface CreateMediaModalProps {
     isOpen: boolean;
@@ -14,6 +15,8 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
     const [mode, setMode] = useState<'post' | 'story'>(initialType);
     const [content, setContent] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [rawImage, setRawImage] = useState<string | null>(null);
+    const [showImageEditor, setShowImageEditor] = useState(false);
     const [loading, setLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,36 +27,22 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
         if (file) {
             const reader = new FileReader();
             reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    // Resize image to max 800px width/height to save space
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const maxSize = 800;
-
-                    if (width > height) {
-                        if (width > maxSize) {
-                            height *= maxSize / width;
-                            width = maxSize;
-                        }
-                    } else {
-                        if (height > maxSize) {
-                            width *= maxSize / height;
-                            height = maxSize;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx?.drawImage(img, 0, 0, width, height);
-                    setSelectedImage(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality
-                };
-                img.src = event.target?.result as string;
+                const dataUrl = event.target?.result as string;
+                setRawImage(dataUrl);
+                setShowImageEditor(true);
             };
             reader.readAsDataURL(file);
         }
+    };
+
+    const handleImageEditorSave = (editedDataUrl: string) => {
+        setSelectedImage(editedDataUrl);
+        setShowImageEditor(false);
+    };
+
+    const handleImageEditorCancel = () => {
+        setShowImageEditor(false);
+        setRawImage(null);
     };
 
     const handleSubmit = async () => {
@@ -86,6 +75,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
             onClose();
             setContent('');
             setSelectedImage(null);
+            setRawImage(null);
         } catch (error) {
             console.error("Failed to create:", error);
         } finally {
@@ -94,12 +84,26 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <>
+            {showImageEditor && rawImage && (
+                <ImageEditor
+                    imageDataUrl={rawImage}
+                    onSave={handleImageEditorSave}
+                    onCancel={handleImageEditorCancel}
+                />
+            )}
+            {!showImageEditor && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <h2 className="font-bold text-lg text-slate-900 dark:text-white">Create New</h2>
-                    <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:hover:text-white">
+                    <button onClick={() => {
+                        onClose();
+                        setContent('');
+                        setSelectedImage(null);
+                        setRawImage(null);
+                    }} className="text-slate-500 hover:text-slate-900 dark:hover:text-white">
                         <X size={24} />
                     </button>
                 </div>
@@ -123,30 +127,41 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
                 {/* Content Area */}
                 <div className="p-6 space-y-4">
                     {/* Image Preview/Upload */}
-                    <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`w-full aspect-video rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden relative ${selectedImage ? 'border-none' : ''}`}
-                    >
-                        {selectedImage ? (
-                            <>
-                                <img src={selectedImage} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium">
-                                    Change Image
+                    <div className="space-y-2">
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`w-full aspect-video rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden relative ${selectedImage ? 'border-none' : ''}`}
+                        >
+                            {selectedImage ? (
+                                <>
+                                    <img src={selectedImage} className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium">
+                                        Change Image
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-slate-400 flex flex-col items-center gap-2">
+                                    <ImageIcon size={32} />
+                                    <span className="text-sm font-medium">Upload Photo</span>
                                 </div>
-                            </>
-                        ) : (
-                            <div className="text-slate-400 flex flex-col items-center gap-2">
-                                <ImageIcon size={32} />
-                                <span className="text-sm font-medium">Upload Photo</span>
-                            </div>
+                            )}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleImageSelect}
+                            />
+                        </div>
+                        {selectedImage && (
+                            <button
+                                onClick={() => setShowImageEditor(true)}
+                                className="w-full py-2 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Edit3 size={16} />
+                                Re-edit Photo
+                            </button>
                         )}
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleImageSelect}
-                        />
                     </div>
 
                     {/* Caption (Post only) */}
@@ -171,6 +186,8 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
                     </button>
                 </div>
             </div>
-        </div>
+            </div>
+            )}
+        </>
     );
 }

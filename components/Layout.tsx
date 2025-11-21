@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
     Home,
@@ -13,9 +13,11 @@ import {
     Mic,
     BrainCircuit,
     Search,
-    PlusSquare
+    PlusSquare,
+    ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useProfile } from '../contexts/ProfileContext';
 import { PomodoroOverlay } from './PomodoroOverlay';
 import { MusicPlayer } from './MusicPlayer';
 
@@ -31,8 +33,24 @@ export function Layout({
     onStartVoice: () => void
 }) {
     const { logout } = useAuth();
+    const { profile } = useProfile();
     const navigate = useNavigate();
     const location = useLocation();
+    const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setProfileDropdownOpen(false);
+            }
+        };
+
+        if (profileDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [profileDropdownOpen]);
 
     const handleLogout = async () => {
         try {
@@ -103,13 +121,45 @@ export function Layout({
                         <span className="hidden xl:block font-medium">Switch Appearance</span>
                     </button>
 
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-4 p-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all hover:text-red-500 dark:hover:text-red-400"
-                    >
-                        <LogOut size={24} />
-                        <span className="hidden xl:block font-medium">Log out</span>
-                    </button>
+                    {/* Profile Dropdown */}
+                    <div className="relative" ref={dropdownRef}>
+                        <button
+                            onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group"
+                        >
+                            <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-600 flex items-center justify-center text-sm font-bold text-slate-700 dark:text-white overflow-hidden flex-shrink-0">
+                                {profile?.photoURL ? (
+                                    <img src={profile.photoURL} className="w-full h-full object-cover" alt={profile.displayName} />
+                                ) : (
+                                    profile?.displayName?.charAt(0).toUpperCase() || 'U'
+                                )}
+                            </div>
+                            <div className="hidden xl:flex flex-col items-start">
+                                <span className="font-medium text-sm text-slate-900 dark:text-white truncate">{profile?.displayName || 'Student'}</span>
+                                <ChevronDown size={14} className="text-slate-400" />
+                            </div>
+                        </button>
+
+                        {profileDropdownOpen && (
+                            <div className="absolute bottom-full left-3 mb-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 py-2 z-50">
+                                <button
+                                    onClick={() => {
+                                        navigate('/profile');
+                                        setProfileDropdownOpen(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    View Profile
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Log out
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </aside>
 

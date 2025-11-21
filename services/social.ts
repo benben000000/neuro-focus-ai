@@ -23,6 +23,8 @@ export interface UserProfile {
     email: string;
     photoURL?: string;
     bio?: string;
+    birthday?: string;
+    university?: string;
     level: number;
     xp: number;
     joinedAt: string;
@@ -91,6 +93,8 @@ export const createUserProfile = async (user: any) => {
             email: user.email,
             photoURL: user.photoURL || '',
             bio: 'Ready to learn!',
+            birthday: '',
+            university: '',
             level: 1,
             xp: 0,
             joinedAt: new Date().toISOString(),

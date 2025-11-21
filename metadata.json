@@ -1,0 +1,7 @@
+{
+  "name": "NeuroFocus AI Tutor",
+  "description": "A science-backed study companion powered by Gemini. Features personalized AI tutoring, document analysis, and mastery tracking using spaced repetition principles.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

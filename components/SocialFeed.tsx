@@ -20,6 +20,7 @@ export function SocialFeed() {
     const { currentUser } = useAuth();
     const { profile } = useProfile();
     const [posts, setPosts] = useState<SocialPost[]>([]);
+    const [optimisticPosts, setOptimisticPosts] = useState<SocialPost[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [createMode, setCreateMode] = useState<'post' | 'story'>('post');
@@ -32,10 +33,14 @@ export function SocialFeed() {
     useEffect(() => {
         const unsubscribe = subscribeToFeed((newPosts) => {
             setPosts(newPosts);
+            setOptimisticPosts((current) => current.filter(opt => !newPosts.some(post => post.id === opt.id)));
             setLoading(false);
         });
-        if (currentUser) loadSuggestions();
         return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        if (currentUser) loadSuggestions();
     }, [currentUser]);
 
     const loadSuggestions = async () => {
@@ -61,6 +66,15 @@ export function SocialFeed() {
         setIsCreateModalOpen(true);
     };
 
+    const handlePostCreated = (newPost: SocialPost) => {
+        // Add to optimistic posts - real-time subscription will remove once confirmed
+        setOptimisticPosts(prev => [newPost, ...prev]);
+    };
+
+    // Merge optimistic posts with real posts, avoid duplicates
+    const allPosts = [...optimisticPosts, ...posts.filter(p => !optimisticPosts.find(op => op.id === p.id))];
+    const shouldShowLoading = loading && allPosts.length === 0;
+
     return (
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
             {/* Main Feed Column */}
@@ -82,12 +96,12 @@ export function SocialFeed() {
 
                 {/* Posts Feed */}
                 <div className="space-y-6 pb-20">
-                    {loading ? (
+                    {shouldShowLoading ? (
                         <div className="text-center py-10 text-slate-500">Loading feed...</div>
-                    ) : posts.length === 0 ? (
+                    ) : allPosts.length === 0 ? (
                         <div className="text-center py-10 text-slate-500">No posts yet. Be the first to share!</div>
                     ) : (
-                        posts.map((post) => (
+                        allPosts.map((post) => (
                             <article key={post.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                                 {/* Post Header */}
                                 <div className="p-3 flex items-center justify-between">
@@ -230,6 +244,7 @@ export function SocialFeed() {
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 type={createMode}
+                onPostCreated={handlePostCreated}
             />
         </div>
     );

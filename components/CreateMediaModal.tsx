@@ -1,21 +1,31 @@
-import React, { useState, useRef } from 'react';
-import { X, Image as ImageIcon, Send, Camera } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Image as ImageIcon, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { createPost, createStory, getUserProfile } from '../services/social';
+import { createPost, createStory, getUserProfile, SocialPost } from '../services/social';
 
 interface CreateMediaModalProps {
     isOpen: boolean;
     onClose: () => void;
     type: 'post' | 'story'; // Default mode
+    onPostCreated?: (post: SocialPost) => void;
 }
 
-export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateMediaModalProps) {
+export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCreated }: CreateMediaModalProps) {
     const { currentUser } = useAuth();
     const [mode, setMode] = useState<'post' | 'story'>(initialType);
     const [content, setContent] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Sync mode state with type prop whenever modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setMode(initialType);
+            setError(null);
+        }
+    }, [isOpen, initialType]);
 
     if (!isOpen) return null;
 
@@ -57,11 +67,21 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
     };
 
     const handleSubmit = async () => {
-        if (!currentUser) return;
-        if (mode === 'post' && !content && !selectedImage) return;
-        if (mode === 'story' && !selectedImage) return;
+        if (!currentUser) {
+            setError('You need to be signed in to share.');
+            return;
+        }
+        if (mode === 'post' && !content && !selectedImage) {
+            setError('Add a caption or photo to share a post.');
+            return;
+        }
+        if (mode === 'story' && !selectedImage) {
+            setError('Stories require a photo or image.');
+            return;
+        }
 
         setLoading(true);
+        setError(null);
         try {
             const userProfile = await getUserProfile(currentUser.uid);
             const authorData = {
@@ -76,18 +96,32 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
                     mediaUrl: selectedImage
                 });
             } else {
-                await createPost({
+                const postData = {
                     ...authorData,
                     content: content,
                     mediaUrl: selectedImage || undefined,
-                    type: 'status'
-                });
+                    type: 'status' as const
+                };
+                const docId = await createPost(postData);
+                const now = Date.now();
+
+                // Optimistically add to feed if callback provided
+                if (onPostCreated) {
+                    onPostCreated({
+                        id: docId,
+                        ...postData,
+                        likes: 0,
+                        likedBy: [],
+                        createdAt: now
+                    });
+                }
             }
             onClose();
             setContent('');
             setSelectedImage(null);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to create:", error);
+            setError(error?.message || 'Failed to share. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -122,6 +156,14 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType }: CreateM
 
                 {/* Content Area */}
                 <div className="p-6 space-y-4">
+                    {/* Error Alert */}
+                    {error && (
+                        <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-start gap-2">
+                            <AlertCircle className="text-rose-500 flex-shrink-0" size={20} />
+                            <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>
+                        </div>
+                    )}
+
                     {/* Image Preview/Upload */}
                     <div
                         onClick={() => fileInputRef.current?.click()}

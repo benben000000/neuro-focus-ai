@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { useNavigate, Link } from 'react-router-dom';
+import { createUserProfile } from '../services/social';
 import { BrainCircuit, Mail, Lock, ArrowRight, Loader2, User } from 'lucide-react';
 
 export function Register() {
@@ -28,8 +29,9 @@ export function Register() {
 
         setLoading(true);
         try {
-            await createUserWithEmailAndPassword(auth, email, password);
-            navigate('/dashboard');
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            await createUserProfile(userCredential.user);
+            navigate('/onboarding');
         } catch (err: any) {
             setError('Failed to create account. ' + err.message);
         } finally {

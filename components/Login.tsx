@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '../services/firebase';
 import { useNavigate, Link } from 'react-router-dom';
+import { createUserProfile } from '../services/social';
 import { BrainCircuit, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 
 export function Login() {
@@ -29,7 +30,8 @@ export function Login() {
         setError('');
         setLoading(true);
         try {
-            await signInWithPopup(auth, googleProvider);
+            const result = await signInWithPopup(auth, googleProvider);
+            await createUserProfile(result.user);
             navigate('/dashboard');
         } catch (err: any) {
             setError('Failed to sign in with Google. ' + err.message);

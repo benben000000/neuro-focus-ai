@@ -8,7 +8,9 @@ import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { Layout } from './components/Layout';
 import { LiveVoiceTutor } from './components/LiveVoiceTutor';
+import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ProfileProvider, useProfile } from './contexts/ProfileContext';
 import { PomodoroProvider } from './contexts/PomodoroContext';
 import { FileAttachment, StudySessionStats } from './types';
 import { logSession } from './services/learning';
@@ -18,11 +20,27 @@ import { ChatSystem } from './components/ChatSystem';
 
 // Private Route Wrapper
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading: authLoading } = useAuth();
+  const { profile, loading: profileLoading } = useProfile();
+  const location = useLocation();
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
+  if (authLoading || profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
-  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+  if (!currentUser) {
+    return <Navigate to="/login" />;
+  }
+
+  if (!profile?.hasCompletedOnboarding && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" />;
+  }
+
+  return <>{children}</>;
 }
 
 function AppContent() {
@@ -114,6 +132,12 @@ function AppContent() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        <Route path="/onboarding" element={
+          <PrivateRoute>
+            <Onboarding />
+          </PrivateRoute>
+        } />
+
         <Route path="/" element={
           <PrivateRoute>
             <Layout theme={theme} toggleTheme={toggleTheme} onStartVoice={() => setIsVoiceMode(true)} />
@@ -163,9 +187,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <PomodoroProvider>
-          <AppContent />
-        </PomodoroProvider>
+        <ProfileProvider>
+          <PomodoroProvider>
+            <AppContent />
+          </PomodoroProvider>
+        </ProfileProvider>
       </AuthProvider>
     </BrowserRouter>
   );

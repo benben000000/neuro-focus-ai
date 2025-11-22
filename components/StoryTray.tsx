@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Story, subscribeToStories } from '../services/social';
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
+import { CommentThread } from './CommentThread';
 
 interface StoryTrayProps {
     onCreateStory: () => void;
@@ -14,6 +15,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
     const [groupedStories, setGroupedStories] = useState<Record<string, Story[]>>({});
     const [viewingStory, setViewingStory] = useState<string | null>(null); // Author ID
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+    const [showComments, setShowComments] = useState(false);
 
     useEffect(() => {
         const unsubscribe = subscribeToStories((fetchedStories) => {
@@ -34,6 +36,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
     const handleViewStory = (authorId: string) => {
         setViewingStory(authorId);
         setCurrentStoryIndex(0);
+        setShowComments(false);
     };
 
     const handleNextStory = () => {
@@ -41,14 +44,17 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
         const userStories = groupedStories[viewingStory];
         if (currentStoryIndex < userStories.length - 1) {
             setCurrentStoryIndex(prev => prev + 1);
+            setShowComments(false);
         } else {
             setViewingStory(null);
+            setShowComments(false);
         }
     };
 
     const handlePrevStory = () => {
         if (currentStoryIndex > 0) {
             setCurrentStoryIndex(prev => prev - 1);
+            setShowComments(false);
         }
     };
 
@@ -147,20 +153,62 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                             )}
 
                             {/* Story-to-story navigation */}
-                            <button
-                                type="button"
-                                onClick={handlePrevStory}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center"
-                            >
-                                <ChevronLeft size={18} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleNextStory}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center"
-                            >
-                                <ChevronRight size={18} />
-                            </button>
+                            {!showComments && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handlePrevStory}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center z-10"
+                                    >
+                                        <ChevronLeft size={18} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleNextStory}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center z-10"
+                                    >
+                                        <ChevronRight size={18} />
+                                    </button>
+                                </>
+                            )}
+
+                            {/* Comments Overlay */}
+                            {showComments && (
+                                <div className="absolute inset-0 z-30 bg-black/80 flex flex-col animate-in slide-in-from-bottom-10">
+                                    <div className="bg-slate-900 h-full rounded-t-2xl mt-20 flex flex-col border-t border-slate-700 shadow-2xl">
+                                        <div className="p-4 flex-1 min-h-0">
+                                            <CommentThread
+                                                targetType="story"
+                                                targetId={activeStory.id}
+                                                authorId={activeStory.authorId}
+                                                onClose={() => setShowComments(false)}
+                                                variant="full"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Bottom Action Bar */}
+                            {!showComments && (
+                                <div className="absolute bottom-0 left-0 w-full p-4 z-20 bg-gradient-to-t from-black/80 to-transparent pt-10">
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => setShowComments(true)}
+                                            className="flex-1 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white/70 text-sm rounded-full px-4 py-3 text-left border border-white/10"
+                                        >
+                                            Add a comment...
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowComments(true)}
+                                            className="flex flex-col items-center text-white gap-0.5"
+                                        >
+                                            <MessageCircle size={24} />
+                                            <span className="text-[10px] font-bold shadow-sm">{activeStory.commentsCount || 0}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

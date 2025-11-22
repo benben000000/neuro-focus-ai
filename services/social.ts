@@ -13,7 +13,8 @@ import {
     Timestamp,
     updateDoc,
     arrayUnion,
-    deleteDoc
+    deleteDoc,
+    increment
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -44,6 +45,15 @@ export interface ComposerMedia {
     mimeType: string;
 }
 
+export interface SocialComment {
+    id: string;
+    authorId: string;
+    authorName: string;
+    authorPhoto?: string;
+    content: string;
+    createdAt: number;
+}
+
 export interface SocialPost {
     id: string;
     authorId: string;
@@ -68,6 +78,7 @@ export interface SocialPost {
     };
     likes: number;
     likedBy?: string[]; // Track who liked
+    commentsCount: number;
     createdAt: number; // timestamp
 }
 
@@ -88,6 +99,7 @@ export interface Story {
     mediaUrl?: string;
     // New media carousel support
     media?: ComposerMedia[];
+    commentsCount: number;
     createdAt: number;
     expiresAt: number;
     viewedBy?: string[];
@@ -184,6 +196,7 @@ export const createStory = async (
         const now = Date.now();
         const docRef = await addDoc(storiesRef, {
             ...story,
+            commentsCount: 0,
             createdAt: now,
             expiresAt: now + (24 * 60 * 60 * 1000) // 24 hours
         });
@@ -233,6 +246,7 @@ export const createPost = async (
             ...post,
             likes: 0,
             likedBy: [],
+            commentsCount: 0,
             createdAt: Date.now()
         });
         return docRef.id;
@@ -298,6 +312,59 @@ export const subscribeToUserPosts = (userId: string, callback: (posts: SocialPos
             ...doc.data()
         } as SocialPost));
         callback(posts);
+    });
+};
+
+export const addComment = async (
+    targetType: 'post' | 'story',
+    targetId: string,
+    comment: Omit<SocialComment, 'id' | 'createdAt'>
+) => {
+    const collectionName = targetType === 'post' ? 'posts' : 'stories';
+    const parentRef = doc(db, collectionName, targetId);
+    const commentsRef = collection(db, collectionName, targetId, 'comments');
+
+    await addDoc(commentsRef, {
+        ...comment,
+        createdAt: Date.now()
+    });
+
+    await updateDoc(parentRef, {
+        commentsCount: increment(1)
+    });
+};
+
+export const deleteComment = async (
+    targetType: 'post' | 'story',
+    targetId: string,
+    commentId: string
+) => {
+    const collectionName = targetType === 'post' ? 'posts' : 'stories';
+    const parentRef = doc(db, collectionName, targetId);
+    const commentRef = doc(db, collectionName, targetId, 'comments', commentId);
+
+    await deleteDoc(commentRef);
+
+    await updateDoc(parentRef, {
+        commentsCount: increment(-1)
+    });
+};
+
+export const subscribeToComments = (
+    targetType: 'post' | 'story',
+    targetId: string,
+    callback: (comments: SocialComment[]) => void
+) => {
+    const collectionName = targetType === 'post' ? 'posts' : 'stories';
+    const commentsRef = collection(db, collectionName, targetId, 'comments');
+    const q = query(commentsRef, orderBy('createdAt', 'asc'));
+
+    return onSnapshot(q, (snapshot) => {
+        const comments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as SocialComment));
+        callback(comments);
     });
 };
 

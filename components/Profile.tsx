@@ -5,6 +5,7 @@ import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost } from 
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
+import { CommentThread } from './CommentThread';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle } from 'lucide-react';
 
 export function Profile() {
@@ -557,7 +558,7 @@ export function Profile() {
                                 </div>
                             </div>
 
-                            <div className="p-4 flex-1 overflow-y-auto space-y-3 text-sm">
+                            <div className="p-4 shrink-0 max-h-[40%] overflow-y-auto space-y-3 text-sm border-b border-slate-800">
                                 {activePost.content && (
                                     <p className="whitespace-pre-wrap">{activePost.content}</p>
                                 )}
@@ -577,7 +578,7 @@ export function Profile() {
                                     </button>
                                     <button className="flex items-center gap-1 text-slate-400">
                                         <MessageCircle size={16} />
-                                        <span className="text-xs">0 comments</span>
+                                        <span className="text-xs">{activePost.commentsCount} comments</span>
                                     </button>
                                 </div>
 
@@ -606,6 +607,14 @@ export function Profile() {
                                         </button>
                                     </div>
                                 )}
+                            </div>
+                            <div className="flex-1 p-4 min-h-0">
+                                <CommentThread 
+                                    targetType="post" 
+                                    targetId={activePost.id} 
+                                    authorId={activePost.authorId}
+                                    variant="full"
+                                />
                             </div>
                         </div>
                     </div>

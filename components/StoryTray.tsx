@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Story, subscribeToStories } from '../services/social';
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
+import { ShareModal } from './ShareModal';
 
 interface StoryTrayProps {
     onCreateStory: () => void;
@@ -14,6 +15,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
     const [groupedStories, setGroupedStories] = useState<Record<string, Story[]>>({});
     const [viewingStory, setViewingStory] = useState<string | null>(null); // Author ID
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+    const [shareModalContent, setShareModalContent] = useState<{ type: 'post' | 'story', id: string } | null>(null);
 
     useEffect(() => {
         const unsubscribe = subscribeToStories((fetchedStories) => {
@@ -122,15 +124,26 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                         </div>
 
                         {/* Header */}
-                        <div className="absolute top-4 left-0 w-full p-4 flex items-center gap-3 z-20">
-                            <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20">
-                                {activeStory.authorPhoto ? (
-                                    <img src={activeStory.authorPhoto} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full bg-slate-700" />
-                                )}
+                        <div className="absolute top-4 left-0 w-full p-4 flex items-center justify-between z-20">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20">
+                                    {activeStory.authorPhoto ? (
+                                        <img src={activeStory.authorPhoto} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full bg-slate-700" />
+                                    )}
+                                </div>
+                                <span className="font-bold text-white shadow-sm">{activeStory.authorName}</span>
                             </div>
-                            <span className="font-bold text-white shadow-sm">{activeStory.authorName}</span>
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShareModalContent({ type: 'story', id: activeStory.id });
+                                }}
+                                className="text-white/80 hover:text-white p-2 bg-black/20 rounded-full backdrop-blur-sm"
+                            >
+                                <Share2 size={20} />
+                            </button>
                         </div>
 
                         {/* Main Content */}
@@ -164,6 +177,14 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                         </div>
                     </div>
                 </div>
+            )}
+            
+            {shareModalContent && (
+                <ShareModal
+                    isOpen={!!shareModalContent}
+                    onClose={() => setShareModalContent(null)}
+                    content={shareModalContent}
+                />
             )}
         </>
     );

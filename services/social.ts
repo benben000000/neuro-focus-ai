@@ -301,6 +301,88 @@ export const subscribeToUserPosts = (userId: string, callback: (posts: SocialPos
     });
 };
 
+// --- SHARING FUNCTIONS ---
+
+export interface SharedItem {
+    id: string;
+    type: 'post' | 'story';
+    contentId: string;
+    senderId: string;
+    senderName: string;
+    senderAvatar?: string;
+    recipientId: string;
+    note?: string;
+    createdAt: number;
+    // Hydrated content
+    post?: SocialPost;
+    story?: Story;
+}
+
+export const shareContent = async (
+    recipientIds: string[],
+    content: { type: 'post' | 'story', id: string },
+    sender: { uid: string, displayName: string, photoURL?: string },
+    note?: string
+) => {
+    const sharesRef = collection(db, 'shares');
+    
+    const promises = recipientIds.map(async (recipientId) => {
+        await addDoc(sharesRef, {
+            type: content.type,
+            contentId: content.id,
+            senderId: sender.uid,
+            senderName: sender.displayName,
+            senderAvatar: sender.photoURL || '',
+            recipientId: recipientId,
+            note: note || '',
+            createdAt: Date.now()
+        });
+    });
+    
+    await Promise.all(promises);
+};
+
+export const subscribeToShares = (userId: string, callback: (shares: SharedItem[]) => void) => {
+    const sharesRef = collection(db, 'shares');
+    const q = query(sharesRef, where('recipientId', '==', userId), orderBy('createdAt', 'desc'));
+
+    return onSnapshot(q, async (snapshot) => {
+        const rawShares = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as SharedItem));
+        
+        const enrichedShares = await Promise.all(rawShares.map(async (share) => {
+            const newShare = { ...share };
+            try {
+                if (share.type === 'post') {
+                    const postRef = doc(db, 'posts', share.contentId);
+                    const postSnap = await getDoc(postRef);
+                    if (postSnap.exists()) {
+                        newShare.post = { id: postSnap.id, ...postSnap.data() } as SocialPost;
+                    }
+                } else if (share.type === 'story') {
+                    const storyRef = doc(db, 'stories', share.contentId);
+                    const storySnap = await getDoc(storyRef);
+                    if (storySnap.exists()) {
+                        newShare.story = { id: storySnap.id, ...storySnap.data() } as Story;
+                    }
+                }
+            } catch (e) {
+                console.error('Error hydrating share', share.id, e);
+            }
+            return newShare;
+        }));
+        
+        callback(enrichedShares);
+    });
+};
+
+export const dismissShare = async (shareId: string) => {
+    const shareRef = doc(db, 'shares', shareId);
+    await deleteDoc(shareRef);
+};
+
 // --- CHAT FUNCTIONS ---
 
 export const createGroupChat = async (name: string, participantIds: string[]) => {

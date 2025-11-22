@@ -6,6 +6,8 @@ import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlu
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
 import { MediaCarousel } from './MediaCarousel';
+import { ShareModal } from './ShareModal';
+import { SharedContentPanel } from './SharedContentPanel';
 
 const timeAgo = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -25,6 +27,7 @@ export function SocialFeed() {
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [createMode, setCreateMode] = useState<'post' | 'story'>('post');
+    const [shareModalContent, setShareModalContent] = useState<{ type: 'post' | 'story', id: string } | null>(null);
 
     // Sidebar states
     const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
@@ -170,7 +173,10 @@ export function SocialFeed() {
                                             <button className="text-slate-900 dark:text-white hover:text-slate-600">
                                                 <MessageCircle size={24} />
                                             </button>
-                                            <button className="text-slate-900 dark:text-white hover:text-slate-600">
+                                            <button 
+                                                onClick={() => setShareModalContent({ type: 'post', id: post.id })}
+                                                className="text-slate-900 dark:text-white hover:text-slate-600"
+                                            >
                                                 <Share2 size={24} />
                                             </button>
                                         </div>
@@ -219,6 +225,8 @@ export function SocialFeed() {
                     </div>
                     <button className="text-xs font-bold text-indigo-600 hover:text-indigo-800">Switch</button>
                 </div>
+
+                <SharedContentPanel />
 
                 {/* Search */}
                 <form onSubmit={handleSearch} className="relative">
@@ -269,6 +277,14 @@ export function SocialFeed() {
                 type={createMode}
                 onPostCreated={handlePostCreated}
             />
+
+            {shareModalContent && (
+                <ShareModal
+                    isOpen={!!shareModalContent}
+                    onClose={() => setShareModalContent(null)}
+                    content={shareModalContent}
+                />
+            )}
         </div>
     );
 }

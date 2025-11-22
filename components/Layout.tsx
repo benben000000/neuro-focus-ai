@@ -172,6 +172,9 @@ export function Layout({
                         <button onClick={toggleTheme} className="text-slate-900 dark:text-white">
                             {theme === 'light' ? <Moon size={24} /> : <Sun size={24} />}
                         </button>
+                        <button onClick={onStartVoice} className="text-slate-900 dark:text-white">
+                            <Mic size={24} />
+                        </button>
                         <button onClick={() => navigate('/chat')} className="text-slate-900 dark:text-white relative">
                             <MessageCircle size={24} />
                             <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[10px] flex items-center justify-center text-white font-bold">2</span>
@@ -189,14 +192,7 @@ export function Layout({
             <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-40 pb-safe">
                 <NavItem path="/dashboard" icon={Home} label="Home" isMobile />
                 <NavItem path="/tutor" icon={GraduationCap} label="Tutor" isMobile />
-                <div className="flex items-center justify-center">
-                    <button
-                        onClick={onStartVoice}
-                        className="w-10 h-10 bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-slate-900 shadow-lg active:scale-95 transition-transform"
-                    >
-                        <Mic size={20} />
-                    </button>
-                </div>
+                <NavItem path="/tools" icon={LibraryBig} label="Tools" isMobile />
                 <NavItem path="/community" icon={Users} label="Social" isMobile />
                 <NavItem path="/profile" icon={User} label="Profile" isMobile />
             </nav>

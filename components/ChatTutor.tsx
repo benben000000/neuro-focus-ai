@@ -195,7 +195,7 @@ export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachment
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-5xl mx-auto bg-white dark:bg-slate-900 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-4 relative">
+    <div className="flex flex-col h-[calc(100vh-8rem)] max-w-5xl mx-auto bg-white dark:bg-slate-900 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden mt-4 relative">
       
       {isVoiceMode && <LiveVoiceTutor onClose={() => setIsVoiceMode(false)} attachments={attachments} />}
 
@@ -254,7 +254,7 @@ export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachment
       </div>
 
       {/* Input Area */}
-      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+      <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 pb-safe">
         {attachments.length > 0 && (
              <div className="mb-3 flex flex-wrap gap-2">
                 {attachments.map((att, i) => (

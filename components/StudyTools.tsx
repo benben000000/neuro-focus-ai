@@ -208,6 +208,8 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
     const [deepDiveType, setDeepDiveType] = useState<DeepDiveType>('SOCRATIC');
     const [deepDivePrompt, setDeepDivePrompt] = useState('');
 
+    const [activeMobileTab, setActiveMobileTab] = useState('Quick');
+
     // --- NEW MODES STATES ---
     const [equations, setEquations] = useState<EquationProblem[]>([]);
     const [equationIndex, setEquationIndex] = useState(0);
@@ -317,6 +319,24 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
         setLoadingMore(false);
     };
 
+    const tools = [
+        { id: 'flashcards', title: "Flashcards", desc: "Spaced repetition basics.", icon: <Layers />, color: "orange", category: 'Quick', onClick: launchFlashcards },
+        { id: 'quiz', title: "AI Quiz", desc: "Test your knowledge.", icon: <CheckCircle2 />, color: "emerald", category: 'Quick', onClick: launchQuiz },
+        { id: 'blurting', title: "Blurting", desc: "Active recall writing.", icon: <PenTool />, color: "purple", category: 'Deep', onClick: launchBlurting },
+        { id: 'feynman', title: "Feynman", desc: "Teach to learn.", icon: <MessageCircleQuestion />, color: "amber", category: 'Deep', onClick: launchFeynman },
+        { id: 'mindmap', title: "Mind Map", desc: "Visualize connections.", icon: <Network />, color: "pink", category: 'Visual', onClick: launchMindMap },
+        { id: 'cloze', title: "Cloze", desc: "Fill in the blanks.", icon: <Dna />, color: "cyan", category: 'Quick', onClick: launchCloze },
+        { id: 'socratic', title: "Socratic", desc: "Critical thinking.", icon: <Brain />, color: "teal", category: 'Deep', onClick: () => launchDeepDive('SOCRATIC') },
+        { id: 'equation', title: "Equation", desc: "Step-by-step solving.", icon: <Calculator />, color: "blue", category: 'Visual', onClick: launchEquation },
+        { id: 'memorization', title: "Memorization", desc: "Text occlusion.", icon: <Eye />, color: "indigo", category: 'Quick', onClick: launchMemorization },
+        { id: 'identify', title: "Identify", desc: "Guess the concept.", icon: <Target />, color: "rose", category: 'Quick', onClick: launchIdentification },
+        { id: 'peer', title: "Peer Teach", desc: "Audio roleplay.", icon: <Mic />, color: "sky", category: 'Deep', onClick: launchPeerTeaching },
+        { id: 'video', title: "Video Explainer", desc: "Interactive lecture.", icon: <VideoIcon />, color: "lime", category: 'Visual', onClick: launchVideoExplainer },
+        { id: 'exam', title: "Major Exam", desc: "Full 20-question test.", icon: <GraduationCap />, color: "indigo", category: 'Exam', onClick: launchMajorExam },
+    ];
+
+    const categories = ['Quick', 'Deep', 'Visual', 'Exam'];
+
     // --- Renderers ---
 
     const submitBlurting = async () => { if (!topic || !textInput) return; setIsLoading(true); setFeedback(await evaluateBlurting(attachments, topic, textInput)); setIsLoading(false); };
@@ -373,26 +393,59 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
     };
 
     if (mode === 'MENU') return (
-        <div className="max-w-6xl mx-auto p-6 space-y-10 animate-fade-in">
+        <div className="max-w-6xl mx-auto p-4 md:p-6 space-y-6 md:space-y-10 animate-fade-in pb-24 md:pb-6">
             <div className="text-center space-y-2"><h1 className="text-3xl font-bold text-slate-900 dark:text-white">Study Lab</h1><p className="text-slate-600 dark:text-slate-400">Select a science-backed method to master your material.</p></div>
             {isSessionActive && <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 rounded-lg text-center text-green-700 dark:text-green-400 text-sm font-medium mb-4">Session Active: Recording progress...</div>}
-            <div className="bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900 rounded-xl p-6 flex flex-wrap gap-3 items-center"> <div className="flex items-center gap-2 mr-4"><Layers size={18} className="text-indigo-600 dark:text-indigo-400" /><span className="font-semibold text-indigo-900 dark:text-indigo-100">Context:</span></div> {attachments.map((f, i) => (<div key={i} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2"><span className="truncate max-w-[120px]">{f.name}</span><button onClick={() => removeFile(i)} className="hover:text-red-500"><X size={14} /></button></div>))} <div className="w-32"><FileUploader onFilesSelected={fs => setAttachments(p => [...p, ...fs])} compact /></div> </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <ToolCard title="Flashcards" desc="Spaced repetition basics." icon={<Layers />} color="orange" onClick={launchFlashcards} />
-                <ToolCard title="AI Quiz" desc="Test your knowledge." icon={<CheckCircle2 />} color="emerald" onClick={launchQuiz} />
-                <ToolCard title="Blurting" desc="Active recall writing." icon={<PenTool />} color="purple" onClick={launchBlurting} />
-                <ToolCard title="Feynman" desc="Teach to learn." icon={<MessageCircleQuestion />} color="amber" onClick={launchFeynman} />
-                <ToolCard title="Mind Map" desc="Visualize connections." icon={<Network />} color="pink" onClick={launchMindMap} />
-                <ToolCard title="Cloze" desc="Fill in the blanks." icon={<Dna />} color="cyan" onClick={launchCloze} />
-                <ToolCard title="Socratic" desc="Critical thinking." icon={<Brain />} color="teal" onClick={() => launchDeepDive('SOCRATIC')} />
-                <ToolCard title="Equation" desc="Step-by-step solving." icon={<Calculator />} color="blue" onClick={launchEquation} />
-                <ToolCard title="Memorization" desc="Text occlusion." icon={<Eye />} color="indigo" onClick={launchMemorization} />
-                <ToolCard title="Identify" desc="Guess the concept." icon={<Target />} color="rose" onClick={launchIdentification} />
-                <ToolCard title="Peer Teach" desc="Audio roleplay." icon={<Mic />} color="sky" onClick={launchPeerTeaching} />
-                <ToolCard title="Peer Teach" desc="Audio roleplay." icon={<Mic />} color="sky" onClick={launchPeerTeaching} />
-                <ToolCard title="Video Explainer" desc="Interactive lecture." icon={<VideoIcon />} color="lime" onClick={launchVideoExplainer} />
-                <ToolCard title="Major Exam" desc="Full 20-question test." icon={<GraduationCap />} color="indigo" onClick={launchMajorExam} />
+            
+            <div className="bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900 rounded-xl p-4 md:p-6 flex flex-wrap gap-3 items-center">
+                <div className="flex items-center gap-2 mr-4 shrink-0">
+                    <Layers size={18} className="text-indigo-600 dark:text-indigo-400" />
+                    <span className="font-semibold text-indigo-900 dark:text-indigo-100">Context:</span>
+                </div>
+                <div className="flex flex-wrap gap-2 flex-1 min-w-0">
+                    {attachments.map((f, i) => (
+                        <div key={i} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2 max-w-full">
+                            <span className="truncate max-w-[100px] md:max-w-[120px]">{f.name}</span>
+                            <button onClick={() => removeFile(i)} className="hover:text-red-500 shrink-0"><X size={14} /></button>
+                        </div>
+                    ))}
+                    <div className="min-w-[120px]">
+                        <FileUploader onFilesSelected={fs => setAttachments(p => [...p, ...fs])} compact />
+                    </div>
+                </div>
             </div>
+
+            {/* Mobile Categories */}
+            <div className="md:hidden flex overflow-x-auto pb-2 gap-2 no-scrollbar">
+                {categories.map(cat => (
+                    <button
+                        key={cat}
+                        onClick={() => setActiveMobileTab(cat)}
+                        className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-colors ${
+                            activeMobileTab === cat 
+                            ? 'bg-indigo-600 text-white' 
+                            : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}
+                    >
+                        {cat}
+                    </button>
+                ))}
+            </div>
+
+            {/* Desktop Grid */}
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {tools.map((tool) => (
+                    <ToolCard key={tool.id} {...tool} />
+                ))}
+            </div>
+
+            {/* Mobile Filtered Grid */}
+            <div className="md:hidden grid grid-cols-2 gap-3">
+                {tools.filter(t => t.category === activeMobileTab).map((tool) => (
+                    <ToolCard key={tool.id} {...tool} />
+                ))}
+            </div>
+
             {isLoading && <div className="fixed inset-0 bg-white/80 dark:bg-slate-900/80 z-50 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600 dark:text-indigo-400" size={48} /></div>}
         </div>
     );

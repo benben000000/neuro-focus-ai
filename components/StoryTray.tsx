@@ -56,10 +56,10 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
 
     return (
         <>
-            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 overflow-x-auto">
-                <div className="flex gap-4 min-w-max">
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 overflow-x-auto snap-x snap-mandatory no-scrollbar">
+                <div className="flex gap-4 min-w-max px-2">
                     {/* Add Story Button */}
-                    <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={onCreateStory}>
+                    <div className="flex flex-col items-center gap-1 cursor-pointer snap-center" onClick={onCreateStory}>
                         <div className="w-16 h-16 rounded-full p-[2px] border-2 border-slate-200 dark:border-slate-700 relative">
                             <div className="w-full h-full rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                                 {currentUser?.photoURL ? (
@@ -80,7 +80,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                         if (authorId === currentUser?.uid) return null; // Skip own story in list for now
                         const story = userStories[0]; // Show latest or first
                         return (
-                            <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
+                            <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer snap-center" onClick={() => handleViewStory(authorId)}>
                                 <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
                                     <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white dark:bg-slate-800">
                                         {story.authorPhoto ? (

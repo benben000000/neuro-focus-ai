@@ -10,7 +10,7 @@ import {
     ChatMessage,
     UserProfile
 } from '../services/social';
-import { Send, Plus, Users, MessageCircle, Search, MoreVertical } from 'lucide-react';
+import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Menu, X } from 'lucide-react';
 
 export function ChatSystem() {
     const { currentUser } = useAuth();
@@ -20,6 +20,7 @@ export function ChatSystem() {
     const [newMessage, setNewMessage] = useState('');
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -71,20 +72,39 @@ export function ChatSystem() {
         const newChatId = await createGroupChat(chatName, [currentUser.uid, participantId]);
         setActiveChatId(newChatId);
         setShowNewChatModal(false);
+        setIsSidebarOpen(false);
     };
 
     return (
-        <div className="h-[calc(100vh-8rem)] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden">
+        <div className="h-[calc(100vh-8rem)] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden relative">
+            {/* Mobile Sidebar Overlay */}
+            {isSidebarOpen && (
+                <div 
+                    className="absolute inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* Sidebar */}
-            <div className="w-80 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+            <div className={`absolute md:relative inset-y-0 left-0 z-30 w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ${
+                isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'
+            }`}>
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                     <h2 className="font-bold text-lg text-slate-900 dark:text-white">Messages</h2>
-                    <button
-                        onClick={() => setShowNewChatModal(true)}
-                        className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 transition-colors"
-                    >
-                        <Plus size={20} />
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setShowNewChatModal(true)}
+                            className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 transition-colors"
+                        >
+                            <Plus size={20} />
+                        </button>
+                        <button 
+                            className="md:hidden p-2 text-slate-500"
+                            onClick={() => setIsSidebarOpen(false)}
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
@@ -97,7 +117,10 @@ export function ChatSystem() {
                         chats.map(chat => (
                             <button
                                 key={chat.id}
-                                onClick={() => setActiveChatId(chat.id)}
+                                onClick={() => {
+                                    setActiveChatId(chat.id);
+                                    setIsSidebarOpen(false);
+                                }}
                                 className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 ${activeChatId === chat.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
                                     }`}
                             >
@@ -119,12 +142,18 @@ export function ChatSystem() {
             </div>
 
             {/* Chat Area */}
-            <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950/50">
+            <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950/50 w-full">
                 {activeChatId ? (
                     <>
                         {/* Chat Header */}
                         <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                             <div className="flex items-center gap-3">
+                                <button 
+                                    className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                                    onClick={() => setIsSidebarOpen(true)}
+                                >
+                                    <Menu size={20} />
+                                </button>
                                 <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold">
                                     <Users size={20} />
                                 </div>
@@ -144,12 +173,12 @@ export function ChatSystem() {
                                 const isMe = msg.senderId === currentUser?.uid;
                                 return (
                                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[70%] rounded-2xl p-4 ${isMe
+                                        <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-4 ${isMe
                                                 ? 'bg-indigo-600 text-white rounded-br-none'
                                                 : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none shadow-sm'
                                             }`}>
                                             {!isMe && <p className="text-xs font-bold mb-1 opacity-70">{msg.senderName}</p>}
-                                            <p>{msg.content}</p>
+                                            <p className="break-words">{msg.content}</p>
                                             <p className={`text-[10px] mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
                                                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </p>
@@ -161,7 +190,7 @@ export function ChatSystem() {
                         </div>
 
                         {/* Input */}
-                        <form onSubmit={handleSendMessage} className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+                        <form onSubmit={handleSendMessage} className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 pb-safe">
                             <div className="flex gap-2">
                                 <input
                                     type="text"
@@ -182,6 +211,13 @@ export function ChatSystem() {
                     </>
                 ) : (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+                        <button 
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="md:hidden mb-8 p-4 bg-indigo-50 text-indigo-600 rounded-xl font-medium flex items-center gap-2"
+                        >
+                            <Menu size={20} />
+                            View All Chats
+                        </button>
                         <MessageCircle size={48} className="mb-4 opacity-20" />
                         <p>Select a chat to start messaging</p>
                     </div>

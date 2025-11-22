@@ -201,10 +201,10 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
+            <div className="bg-white dark:bg-slate-900 w-full h-full md:h-auto md:max-w-lg md:rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
                 {/* Header */}
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
                     <h2 className="font-bold text-lg text-slate-900 dark:text-white">Create New</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:hover:text-white">
                         <X size={24} />
@@ -212,7 +212,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 </div>
 
                 {/* Mode Switcher */}
-                <div className="flex border-b border-slate-100 dark:border-slate-800">
+                <div className="flex border-b border-slate-100 dark:border-slate-800 shrink-0">
                     <button
                         onClick={() => setMode('post')}
                         className={`flex-1 py-3 font-medium text-sm transition-colors ${mode === 'post' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}
@@ -228,7 +228,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 </div>
 
                 {/* Content Area */}
-                <div className="p-6 space-y-4">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {/* Error Alert */}
                     {(error || validationErrors.length > 0) && (
                         <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-start gap-2">
@@ -349,7 +349,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end shrink-0 pb-safe">
                     <button
                         onClick={handleSubmit}
                         disabled={loading || (mode === 'story' && media.length === 0) || (mode === 'post' && !content.trim() && media.length === 0)}

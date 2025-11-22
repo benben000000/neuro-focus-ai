@@ -77,7 +77,7 @@ export function SocialFeed() {
     const shouldShowLoading = loading && allPosts.length === 0;
 
     return (
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pt-4 px-4 md:px-0">
             {/* Main Feed Column */}
             <div className="lg:col-span-2 max-w-xl mx-auto w-full">
                 {/* Stories */}

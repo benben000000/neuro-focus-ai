@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Image as ImageIcon, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { createPost, createStory, getUserProfile, SocialPost, ComposerMedia } from '../services/social';
+import { createPost, createStory, updatePost, getUserProfile, SocialPost, ComposerMedia } from '../services/social';
 import { MediaCarousel } from './MediaCarousel';
 
 interface CreateMediaModalProps {
@@ -9,9 +9,11 @@ interface CreateMediaModalProps {
     onClose: () => void;
     type: 'post' | 'story'; // Default mode
     onPostCreated?: (post: SocialPost) => void;
+    initialData?: SocialPost;
+    onPostUpdated?: (post: SocialPost) => void;
 }
 
-export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCreated }: CreateMediaModalProps) {
+export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCreated, initialData, onPostUpdated }: CreateMediaModalProps) {
     const { currentUser } = useAuth();
     const [mode, setMode] = useState<'post' | 'story'>(initialType);
     const [content, setContent] = useState('');
@@ -29,12 +31,27 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             setMode(initialType);
             setError(null);
             setValidationErrors([]);
+            
+            if (initialData) {
+                setContent(initialData.content);
+                setMedia(initialData.media || (initialData.mediaUrl ? [{
+                    id: 'legacy',
+                    url: initialData.mediaUrl,
+                    width: 0,
+                    height: 0,
+                    mimeType: 'image/jpeg'
+                }] : []));
+            } else {
+                setContent('');
+                setMedia([]);
+            }
         }
-    }, [isOpen, initialType]);
+    }, [isOpen, initialType, initialData]);
 
     if (!isOpen) return null;
 
     const MAX_DIMENSION = 1600;
+
     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
     const compressImageFile = (file: File): Promise<ComposerMedia> => {
@@ -166,25 +183,41 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                     mediaUrl: primaryMediaUrl
                 });
             } else {
-                const postData = {
-                    ...authorData,
-                    content: content.trim(),
-                    media: mediaPayload,
-                    mediaUrl: primaryMediaUrl,
-                    type: 'status' as const
-                };
-                const docId = await createPost(postData);
-                const now = Date.now();
-
-                // Optimistically add to feed if callback provided
-                if (onPostCreated) {
-                    onPostCreated({
-                        id: docId,
-                        ...postData,
-                        likes: 0,
-                        likedBy: [],
-                        createdAt: now
+                if (initialData) {
+                    await updatePost(initialData.id, {
+                        content: content.trim(),
+                        media: mediaPayload,
+                        mediaUrl: primaryMediaUrl
                     });
+                    if (onPostUpdated) {
+                        onPostUpdated({
+                            ...initialData,
+                            content: content.trim(),
+                            media: mediaPayload,
+                            mediaUrl: primaryMediaUrl
+                        });
+                    }
+                } else {
+                    const postData = {
+                        ...authorData,
+                        content: content.trim(),
+                        media: mediaPayload,
+                        mediaUrl: primaryMediaUrl,
+                        type: 'status' as const
+                    };
+                    const docId = await createPost(postData);
+                    const now = Date.now();
+
+                    // Optimistically add to feed if callback provided
+                    if (onPostCreated) {
+                        onPostCreated({
+                            id: docId,
+                            ...postData,
+                            likes: 0,
+                            likedBy: [],
+                            createdAt: now
+                        });
+                    }
                 }
             }
             onClose();
@@ -193,7 +226,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             setActiveIndex(0);
             setValidationErrors([]);
         } catch (error: any) {
-            console.error('Failed to create:', error);
+            console.error('Failed to create/update:', error);
             setError(error?.message || 'Failed to share. Please try again.');
         } finally {
             setLoading(false);
@@ -205,27 +238,30 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <h2 className="font-bold text-lg text-slate-900 dark:text-white">Create New</h2>
+                    <h2 className="font-bold text-lg text-slate-900 dark:text-white">{initialData ? 'Edit Post' : 'Create New'}</h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:hover:text-white">
                         <X size={24} />
                     </button>
                 </div>
 
-                {/* Mode Switcher */}
-                <div className="flex border-b border-slate-100 dark:border-slate-800">
-                    <button
-                        onClick={() => setMode('post')}
-                        className={`flex-1 py-3 font-medium text-sm transition-colors ${mode === 'post' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}
-                    >
-                        Post
-                    </button>
-                    <button
-                        onClick={() => setMode('story')}
-                        className={`flex-1 py-3 font-medium text-sm transition-colors ${mode === 'story' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}
-                    >
-                        Story
-                    </button>
-                </div>
+                {/* Mode Switcher - Hide if editing */}
+                {!initialData && (
+                    <div className="flex border-b border-slate-100 dark:border-slate-800">
+                        <button
+                            onClick={() => setMode('post')}
+                            className={`flex-1 py-3 font-medium text-sm transition-colors ${mode === 'post' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}
+                        >
+                            Post
+                        </button>
+                        <button
+                            onClick={() => setMode('story')}
+                            className={`flex-1 py-3 font-medium text-sm transition-colors ${mode === 'story' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500'}`}
+                        >
+                            Story
+                        </button>
+                    </div>
+                )}
+
 
                 {/* Content Area */}
                 <div className="p-6 space-y-4">

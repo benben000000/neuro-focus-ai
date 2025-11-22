@@ -1,21 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile } from '../services/social';
-import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
+import { subscribeToFeed, SocialPost, searchUsers, getFriendSuggestions, UserProfile } from '../services/social';
+import { Search, PlusSquare } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
-import { MediaCarousel } from './MediaCarousel';
-
-const timeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h`;
-    return `${Math.floor(hours / 24)}d`;
-};
+import { FeedPost } from './FeedPost';
 
 export function SocialFeed() {
     const { currentUser } = useAuth();
@@ -55,11 +45,6 @@ export function SocialFeed() {
         if (!searchQuery.trim()) return;
         const results = await searchUsers(searchQuery);
         setSearchResults(results);
-    };
-
-    const handleLike = async (postId: string) => {
-        if (!currentUser) return;
-        await toggleLike(postId, currentUser.uid);
     };
 
     const openCreateModal = (mode: 'post' | 'story') => {
@@ -103,102 +88,7 @@ export function SocialFeed() {
                         <div className="text-center py-10 text-slate-500">No posts yet. Be the first to share!</div>
                     ) : (
                         allPosts.map((post) => (
-                            <article key={post.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                                {/* Post Header */}
-                                <div className="p-3 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
-                                            <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white">
-                                                {post.authorPhoto ? (
-                                                    <img src={post.authorPhoto} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center font-bold text-xs text-slate-400">
-                                                        {post.authorName[0]}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer">{post.authorName}</h3>
-                                            {post.location && <p className="text-xs text-slate-500">{post.location}</p>}
-                                        </div>
-                                    </div>
-                                    <button className="text-slate-500 hover:text-slate-900 dark:hover:text-white">
-                                        <MoreHorizontal size={20} />
-                                    </button>
-                                </div>
-
-                                {/* Post Media */}
-                                {(post.media && post.media.length > 0) || post.mediaUrl ? (
-                                    <div className="relative w-full aspect-square bg-black flex items-center justify-center overflow-hidden">
-                                        {post.media && post.media.length > 1 ? (
-                                            <MediaCarousel
-                                                media={post.media}
-                                                aspect="square"
-                                                showArrows
-                                                showDots
-                                            />
-                                        ) : (
-                                            <img
-                                                src={post.media && post.media.length === 1 ? post.media[0].url : (post.mediaUrl as string)}
-                                                className="w-full h-full object-cover"
-                                            />
-                                        )}
-
-                                        {post.media && post.media.length > 1 && (
-                                            <div className="absolute top-2 right-2 flex items-center gap-0.5 text-white/90">
-                                                {/* Simple stack indicator for carousel posts */}
-                                                <div className="relative w-4 h-4">
-                                                    <div className="absolute inset-0 rounded-sm border border-white/80 bg-black/40" />
-                                                    <div className="absolute -top-0.5 -left-0.5 w-4 h-4 rounded-sm border border-white/60 bg-black/20" />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : null}
-
-                                {/* Post Actions */}
-                                <div className="p-3">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={() => handleLike(post.id)}
-                                                className={`transition-transform active:scale-125 ${post.likedBy?.includes(currentUser?.uid || '') ? 'text-rose-500' : 'text-slate-900 dark:text-white hover:text-slate-600'}`}
-                                            >
-                                                <Heart size={24} fill={post.likedBy?.includes(currentUser?.uid || '') ? "currentColor" : "none"} />
-                                            </button>
-                                            <button className="text-slate-900 dark:text-white hover:text-slate-600">
-                                                <MessageCircle size={24} />
-                                            </button>
-                                            <button className="text-slate-900 dark:text-white hover:text-slate-600">
-                                                <Share2 size={24} />
-                                            </button>
-                                        </div>
-                                        <button className="text-slate-900 dark:text-white hover:text-slate-600">
-                                            <Bookmark size={24} />
-                                        </button>
-                                    </div>
-
-                                    {/* Likes */}
-                                    <div className="font-bold text-sm text-slate-900 dark:text-white mb-2">
-                                        {post.likes} likes
-                                    </div>
-
-                                    {/* Caption */}
-                                    <div className="text-sm text-slate-900 dark:text-white mb-2">
-                                        <span className="font-bold mr-2">{post.authorName}</span>
-                                        {post.content}
-                                    </div>
-
-                                    {/* Comments Link */}
-                                    <button className="text-slate-500 text-sm mb-1">View all comments</button>
-
-                                    {/* Timestamp */}
-                                    <div className="text-xs text-slate-400 uppercase tracking-wide">
-                                        {timeAgo(post.createdAt)}
-                                    </div>
-                                </div>
-                            </article>
+                            <FeedPost key={post.id} post={post} />
                         ))
                     )}
                 </div>

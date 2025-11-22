@@ -71,6 +71,16 @@ export interface SocialPost {
     createdAt: number; // timestamp
 }
 
+export interface PostComment {
+    id: string;
+    postId: string;
+    authorId: string;
+    authorName: string;
+    authorPhoto?: string;
+    content: string;
+    createdAt: number;
+}
+
 export interface ChatMessage {
     id: string;
     senderId: string;
@@ -298,6 +308,56 @@ export const subscribeToUserPosts = (userId: string, callback: (posts: SocialPos
             ...doc.data()
         } as SocialPost));
         callback(posts);
+    });
+};
+
+export const updatePost = async (postId: string, data: Partial<SocialPost>) => {
+    try {
+        const postRef = doc(db, 'posts', postId);
+        await updateDoc(postRef, data);
+    } catch (error: any) {
+        console.error('updatePost failed', error);
+        throw new Error(error?.message || 'Failed to update post.');
+    }
+};
+
+export const addComment = async (postId: string, user: { uid: string, displayName: string, photoURL?: string }, content: string) => {
+    try {
+        const commentsRef = collection(db, 'posts', postId, 'comments');
+        await addDoc(commentsRef, {
+            postId,
+            authorId: user.uid,
+            authorName: user.displayName,
+            authorPhoto: user.photoURL,
+            content,
+            createdAt: Date.now()
+        });
+    } catch (error: any) {
+        console.error('addComment failed', error);
+        throw new Error(error?.message || 'Failed to add comment.');
+    }
+};
+
+export const deleteComment = async (postId: string, commentId: string) => {
+    try {
+        const commentRef = doc(db, 'posts', postId, 'comments', commentId);
+        await deleteDoc(commentRef);
+    } catch (error: any) {
+        console.error('deleteComment failed', error);
+        throw new Error(error?.message || 'Failed to delete comment.');
+    }
+};
+
+export const subscribeToComments = (postId: string, callback: (comments: PostComment[]) => void) => {
+    const commentsRef = collection(db, 'posts', postId, 'comments');
+    const q = query(commentsRef, orderBy('createdAt', 'asc'));
+
+    return onSnapshot(q, (snapshot) => {
+        const comments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as PostComment));
+        callback(comments);
     });
 };
 

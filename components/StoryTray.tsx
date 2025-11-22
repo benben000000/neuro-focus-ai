@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Story, subscribeToStories, getUserProfile } from '../services/social';
+import { Story, subscribeToStories } from '../services/social';
 import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MediaCarousel } from './MediaCarousel';
 
 interface StoryTrayProps {
     onCreateStory: () => void;
@@ -134,11 +135,32 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
 
                         {/* Main Content */}
                         <div className="flex-1 relative bg-black flex items-center justify-center">
-                            <img src={activeStory.mediaUrl} className="max-w-full max-h-full object-contain" />
+                            {activeStory.media && activeStory.media.length > 0 ? (
+                                <MediaCarousel
+                                    media={activeStory.media}
+                                    aspect="story"
+                                    showArrows
+                                    showDots
+                                />
+                            ) : (
+                                <img src={activeStory.mediaUrl} className="max-w-full max-h-full object-contain" />
+                            )}
 
-                            {/* Navigation Overlays */}
-                            <div className="absolute inset-y-0 left-0 w-1/3" onClick={handlePrevStory} />
-                            <div className="absolute inset-y-0 right-0 w-1/3" onClick={handleNextStory} />
+                            {/* Story-to-story navigation */}
+                            <button
+                                type="button"
+                                onClick={handlePrevStory}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleNextStory}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
                         </div>
                     </div>
                 </div>

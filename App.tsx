@@ -16,6 +16,7 @@ import { FileAttachment } from './types';
 import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
+import { useSecurity } from './hooks/useSecurity';
 
 // Private Route Wrapper
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppContent() {
+  useSecurity();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
 

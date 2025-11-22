@@ -14,10 +14,12 @@ import {
     BrainCircuit,
     Search,
     PlusSquare,
-    ChevronDown
+    ChevronDown,
+    Timer
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
+import { usePomodoro } from '../contexts/PomodoroContext';
 import { PomodoroOverlay } from './PomodoroOverlay';
 import { MusicPlayer } from './MusicPlayer';
 
@@ -34,6 +36,7 @@ export function Layout({
 }) {
     const { logout } = useAuth();
     const { profile } = useProfile();
+    const { isWidgetVisible, setWidgetVisible } = usePomodoro();
     const navigate = useNavigate();
     const location = useLocation();
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
@@ -202,6 +205,16 @@ export function Layout({
             </nav>
 
             <PomodoroOverlay />
+            {!isWidgetVisible && (
+                <button
+                    onClick={() => setWidgetVisible(true)}
+                    className="fixed bottom-36 right-4 md:bottom-8 md:right-48 z-40 bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95 flex items-center gap-2"
+                    title="Open Focus Timer"
+                >
+                    <Timer size={24} />
+                    <span className="hidden md:inline font-bold text-sm">Timer</span>
+                </button>
+            )}
             <MusicPlayer />
         </div>
     );

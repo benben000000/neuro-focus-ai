@@ -12,8 +12,7 @@ import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProfileProvider, useProfile } from './contexts/ProfileContext';
 import { PomodoroProvider } from './contexts/PomodoroContext';
-import { FileAttachment, StudySessionStats } from './types';
-import { logSession } from './services/learning';
+import { FileAttachment } from './types';
 import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
@@ -64,61 +63,6 @@ function AppContent() {
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  // --- SESSION STATE (Legacy/Dashboard prop) ---
-  // We might want to move this to a context later, but for now keep it here or in Dashboard
-  // Actually, Dashboard expects these props. Let's keep them in Dashboard or lift them here if shared.
-  // Dashboard handles its own session logic mostly, but App passed it down.
-  // Let's check Dashboard props. It takes isSessionActive, etc.
-  // For now, let's manage session state here to pass to Dashboard, 
-  // BUT Dashboard is now a Route. We can pass props to element.
-
-  const [isSessionActive, setIsSessionActive] = useState(false);
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [sessionSubject, setSessionSubject] = useState('General Knowledge');
-  const sessionStartTimeRef = React.useRef<number>(0);
-  const timerIntervalRef = React.useRef<number | null>(null);
-
-  useEffect(() => {
-    if (isSessionActive) {
-      timerIntervalRef.current = window.setInterval(() => {
-        setSessionSeconds(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    }
-    return () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
-  }, [isSessionActive]);
-
-  const startSession = (subject: string) => {
-    setSessionSubject(subject);
-    setSessionSeconds(0);
-    sessionStartTimeRef.current = Date.now();
-    setIsSessionActive(true);
-  };
-
-  const endSession = () => {
-    setIsSessionActive(false);
-    const endTime = Date.now();
-    const duration = sessionSeconds;
-
-    if (duration > 10) {
-      const newSession: StudySessionStats = {
-        id: Date.now().toString(),
-        subject: sessionSubject,
-        startTime: sessionStartTimeRef.current,
-        endTime,
-        durationSeconds: duration,
-        toolsUsed: ['Timer'],
-        xpEarned: Math.floor(duration / 60) * 10,
-        mastery: 0,
-        lastStudied: new Date().toISOString(),
-        hoursSpent: duration / 3600
-      };
-      logSession(newSession);
-    }
-    setSessionSeconds(0);
-  };
-
   return (
     <>
       {isVoiceMode && (
@@ -147,11 +91,6 @@ function AppContent() {
             <Dashboard
               attachments={attachments}
               setAttachments={setAttachments}
-              isSessionActive={isSessionActive}
-              sessionSeconds={sessionSeconds}
-              sessionSubject={sessionSubject}
-              onStartSession={startSession}
-              onEndSession={endSession}
             />
           } />
           <Route path="tutor" element={

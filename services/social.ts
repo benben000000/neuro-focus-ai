@@ -14,7 +14,8 @@ import {
     updateDoc,
     arrayUnion,
     deleteDoc,
-    serverTimestamp
+    serverTimestamp,
+    writeBatch
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -376,8 +377,12 @@ export const createGroupChat = async (name: string, participantIds: string[]) =>
 
 export const sendMessage = async (chatId: string, senderId: string, senderName: string, content: string) => {
     try {
+        const batch = writeBatch(db);
+        
         const messagesRef = collection(db, 'chats', chatId, 'messages');
-        await addDoc(messagesRef, {
+        const newMessageRef = doc(messagesRef);
+
+        batch.set(newMessageRef, {
             senderId,
             senderName,
             content,
@@ -387,11 +392,13 @@ export const sendMessage = async (chatId: string, senderId: string, senderName: 
 
         // Update chat metadata
         const chatRef = doc(db, 'chats', chatId);
-        await updateDoc(chatRef, {
+        batch.update(chatRef, {
             lastMessage: content,
             lastMessageTime: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
+
+        await batch.commit();
     } catch (error: any) {
         console.error('Error sending message:', error);
         throw new Error(error?.message || 'Failed to send message.');

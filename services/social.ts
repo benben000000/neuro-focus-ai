@@ -441,8 +441,10 @@ export const followUser = async (currentUid: string, targetUid: string) => {
         }
 
         const currentUserData = currentUserSnap.data() as UserProfile;
+        const targetUserData = targetUserSnap.data() as UserProfile;
 
         const currentFollowing = currentUserData.following || [];
+        const targetFollowers = targetUserData.followers || [];
 
         if (currentFollowing.includes(targetUid)) {
             return; // Already following
@@ -450,12 +452,12 @@ export const followUser = async (currentUid: string, targetUid: string) => {
 
         transaction.update(currentUserRef, {
             following: arrayUnion(targetUid),
-            followingCount: (currentUserData.followingCount || 0) + 1
+            followingCount: currentFollowing.length + 1
         });
 
         transaction.update(targetUserRef, {
             followers: arrayUnion(currentUid),
-            followersCount: (targetUserSnap.data().followersCount || 0) + 1
+            followersCount: targetFollowers.length + 1
         });
     });
 };
@@ -478,6 +480,7 @@ export const unfollowUser = async (currentUid: string, targetUid: string) => {
         const targetUserData = targetUserSnap.data() as UserProfile;
 
         const currentFollowing = currentUserData.following || [];
+        const targetFollowers = targetUserData.followers || [];
 
         if (!currentFollowing.includes(targetUid)) {
             return; // Not following
@@ -485,12 +488,12 @@ export const unfollowUser = async (currentUid: string, targetUid: string) => {
 
         transaction.update(currentUserRef, {
             following: arrayRemove(targetUid),
-            followingCount: Math.max((currentUserData.followingCount || 1) - 1, 0)
+            followingCount: Math.max(currentFollowing.length - 1, 0)
         });
 
         transaction.update(targetUserRef, {
             followers: arrayRemove(currentUid),
-            followersCount: Math.max((targetUserData.followersCount || 1) - 1, 0)
+            followersCount: Math.max(targetFollowers.length - 1, 0)
         });
     });
 };
@@ -500,7 +503,14 @@ export const setVerifiedBadge = async (adminUid: string, targetUid: string, isVe
     
     const adminRef = doc(db, 'users', adminUid);
     const adminSnap = await getDoc(adminRef);
-    if (!adminSnap.exists() || adminSnap.data().email !== adminEmail) {
+    
+    if (!adminSnap.exists()) {
+         throw new Error("Admin user not found");
+    }
+    
+    const adminData = adminSnap.data() as UserProfile;
+    
+    if (adminData.email !== adminEmail) {
         throw new Error("Unauthorized: Only the specified admin can change verification status.");
     }
 

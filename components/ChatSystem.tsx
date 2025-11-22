@@ -5,12 +5,13 @@ import {
     subscribeToChat,
     sendMessage,
     createGroupChat,
+    createOrGetConversation,
     getAllUsers,
     ChatRoom,
     ChatMessage,
     UserProfile
 } from '../services/social';
-import { Send, Plus, Users, MessageCircle, Search, MoreVertical } from 'lucide-react';
+import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2 } from 'lucide-react';
 
 export function ChatSystem() {
     const { currentUser } = useAuth();
@@ -20,6 +21,9 @@ export function ChatSystem() {
     const [newMessage, setNewMessage] = useState('');
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const [isCreatingChat, setIsCreatingChat] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -52,25 +56,42 @@ export function ChatSystem() {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!currentUser || !activeChatId || !newMessage.trim()) return;
+        if (!currentUser || !activeChatId || !newMessage.trim() || isSending) return;
 
-        const userProfile = users.find(u => u.uid === currentUser.uid) || { displayName: 'Me' }; // Fallback
-        // Actually we should get current user profile properly, but for now:
         const senderName = currentUser.displayName || currentUser.email || 'User';
+        
+        setIsSending(true);
+        setError(null);
 
-        await sendMessage(activeChatId, currentUser.uid, senderName, newMessage);
-        setNewMessage('');
+        try {
+            await sendMessage(activeChatId, currentUser.uid, senderName, newMessage);
+            setNewMessage('');
+        } catch (err: any) {
+            console.error('Failed to send message', err);
+            setError('Failed to send message. Please check your connection.');
+        } finally {
+            setIsSending(false);
+        }
     };
 
     const handleCreateChat = async (participantId: string) => {
-        if (!currentUser) return;
-        // Check if chat already exists (simple check)
-        // For now, just create a new group for simplicity or direct if logic allows
-        // Let's create a direct group for now
-        const chatName = "Chat";
-        const newChatId = await createGroupChat(chatName, [currentUser.uid, participantId]);
-        setActiveChatId(newChatId);
-        setShowNewChatModal(false);
+        if (!currentUser || isCreatingChat) return;
+        
+        setIsCreatingChat(true);
+        setError(null);
+        
+        try {
+            const chat = await createOrGetConversation(currentUser.uid, participantId);
+            setActiveChatId(chat.id);
+            setShowNewChatModal(false);
+        } catch (err: any) {
+            console.error('Failed to start chat', err);
+            setError('Failed to start chat. Please try again.');
+            // Show error in modal or as toast
+            alert('Failed to start chat: ' + (err.message || 'Unknown error'));
+        } finally {
+            setIsCreatingChat(false);
+        }
     };
 
     return (
@@ -94,26 +115,35 @@ export function ChatSystem() {
                             <p>No chats yet</p>
                         </div>
                     ) : (
-                        chats.map(chat => (
-                            <button
-                                key={chat.id}
-                                onClick={() => setActiveChatId(chat.id)}
-                                className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 ${activeChatId === chat.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                                    }`}
-                            >
-                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold">
-                                    {chat.type === 'group' ? <Users size={20} /> : 'U'}
-                                </div>
-                                <div className="text-left flex-1 min-w-0">
-                                    <h3 className="font-bold text-slate-900 dark:text-white truncate">
-                                        {chat.name || 'Chat'}
-                                    </h3>
-                                    <p className="text-sm text-slate-500 truncate">
-                                        {chat.lastMessage || 'No messages yet'}
-                                    </p>
-                                </div>
-                            </button>
-                        ))
+                        chats.map(chat => {
+                            // Determine chat name
+                            let chatName = chat.name || 'Chat';
+                            if (chat.type === 'direct' && chat.participantProfiles) {
+                                const otherProfile = chat.participantProfiles.find(p => p.uid !== currentUser?.uid);
+                                if (otherProfile) chatName = otherProfile.displayName || 'User';
+                            }
+                            
+                            return (
+                                <button
+                                    key={chat.id}
+                                    onClick={() => setActiveChatId(chat.id)}
+                                    className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 ${activeChatId === chat.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                                        }`}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold">
+                                        {chat.type === 'group' ? <Users size={20} /> : (chatName.charAt(0).toUpperCase())}
+                                    </div>
+                                    <div className="text-left flex-1 min-w-0">
+                                        <h3 className="font-bold text-slate-900 dark:text-white truncate">
+                                            {chatName}
+                                        </h3>
+                                        <p className="text-sm text-slate-500 truncate">
+                                            {chat.lastMessage || 'No messages yet'}
+                                        </p>
+                                    </div>
+                                </button>
+                            );
+                        })
                     )}
                 </div>
             </div>
@@ -129,7 +159,17 @@ export function ChatSystem() {
                                     <Users size={20} />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-900 dark:text-white">Current Chat</h3>
+                                    <h3 className="font-bold text-slate-900 dark:text-white">
+                                        {/* Find name from chats array */}
+                                        {(() => {
+                                            const chat = chats.find(c => c.id === activeChatId);
+                                            if (chat?.type === 'direct' && chat.participantProfiles) {
+                                                const other = chat.participantProfiles.find(p => p.uid !== currentUser?.uid);
+                                                return other?.displayName || 'Chat';
+                                            }
+                                            return chat?.name || 'Current Chat';
+                                        })()}
+                                    </h3>
                                     <p className="text-xs text-slate-500">Online</p>
                                 </div>
                             </div>
@@ -137,6 +177,13 @@ export function ChatSystem() {
                                 <MoreVertical size={20} />
                             </button>
                         </div>
+
+                        {/* Error Banner */}
+                        {error && (
+                            <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-2 text-center text-sm">
+                                {error}
+                            </div>
+                        )}
 
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -168,14 +215,15 @@ export function ChatSystem() {
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder="Type a message..."
-                                    className="flex-1 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    disabled={isSending}
+                                    className="flex-1 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
                                 />
                                 <button
                                     type="submit"
-                                    disabled={!newMessage.trim()}
-                                    className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors disabled:opacity-50"
+                                    disabled={!newMessage.trim() || isSending}
+                                    className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center min-w-[48px]"
                                 >
-                                    <Send size={20} />
+                                    {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                                 </button>
                             </div>
                         </form>
@@ -203,7 +251,8 @@ export function ChatSystem() {
                                     <button
                                         key={user.uid}
                                         onClick={() => handleCreateChat(user.uid)}
-                                        className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors text-left"
+                                        disabled={isCreatingChat}
+                                        className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors text-left disabled:opacity-50"
                                     >
                                         <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold">
                                             {user.displayName?.charAt(0).toUpperCase()}
@@ -212,6 +261,7 @@ export function ChatSystem() {
                                             <p className="font-bold text-slate-900 dark:text-white">{user.displayName}</p>
                                             <p className="text-xs text-slate-500">{user.email}</p>
                                         </div>
+                                        {isCreatingChat && <div className="ml-auto"><Loader2 size={16} className="animate-spin text-slate-400"/></div>}
                                     </button>
                                 ))}
                             </div>

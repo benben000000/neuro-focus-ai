@@ -13,7 +13,8 @@ import {
     Timestamp,
     updateDoc,
     arrayUnion,
-    deleteDoc
+    deleteDoc,
+    serverTimestamp
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -76,7 +77,8 @@ export interface ChatMessage {
     senderId: string;
     senderName: string;
     content: string;
-    createdAt: number;
+    createdAt: any; // number | Timestamp
+    conversationId?: string;
 }
 
 export interface Story {
@@ -99,7 +101,9 @@ export interface ChatRoom {
     participants: string[]; // user IDs
     name?: string; // for groups
     lastMessage?: string;
-    lastMessageTime?: number;
+    lastMessageTime?: any; // number | Timestamp
+    participantProfiles?: Partial<UserProfile>[];
+    updatedAt?: any;
 }
 
 // --- PROFILE FUNCTIONS ---
@@ -303,34 +307,95 @@ export const subscribeToUserPosts = (userId: string, callback: (posts: SocialPos
 
 // --- CHAT FUNCTIONS ---
 
+export const createOrGetConversation = async (currentUid: string, peerUid: string) => {
+    // Sort participants to ensure consistent ID for direct chats
+    const participants = [currentUid, peerUid].sort();
+    const chatId = `${participants[0]}_${participants[1]}`;
+    const chatDocRef = doc(db, 'chats', chatId);
+    
+    try {
+        const chatDoc = await getDoc(chatDocRef);
+
+        if (chatDoc.exists()) {
+            const data = chatDoc.data();
+            return { 
+                id: chatDoc.id, 
+                ...data,
+                lastMessageTime: data.lastMessageTime?.toMillis ? data.lastMessageTime.toMillis() : data.lastMessageTime
+            } as ChatRoom;
+        }
+
+        // Create new chat
+        const [currentUserProfile, peerUserProfile] = await Promise.all([
+            getUserProfile(currentUid),
+            getUserProfile(peerUid)
+        ]);
+
+        const newChatData = {
+            type: 'direct' as const,
+            participants,
+            participantProfiles: [
+                currentUserProfile || { uid: currentUid, displayName: 'User' },
+                peerUserProfile || { uid: peerUid, displayName: 'User' }
+            ],
+            lastMessage: '',
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp()
+        };
+
+        await setDoc(chatDocRef, newChatData);
+        
+        // Return with current time as estimate for pending write
+        return { 
+            id: chatId, 
+            ...newChatData,
+            lastMessageTime: Date.now(),
+            updatedAt: Date.now(),
+            createdAt: Date.now()
+        } as unknown as ChatRoom;
+    } catch (error: any) {
+        console.error('Error in createOrGetConversation:', error);
+        throw new Error(error?.message || 'Failed to create conversation.');
+    }
+};
+
 export const createGroupChat = async (name: string, participantIds: string[]) => {
     const chatsRef = collection(db, 'chats');
     const newChat = await addDoc(chatsRef, {
         type: 'group',
         name,
         participants: participantIds,
-        createdAt: Date.now(),
+        createdAt: serverTimestamp(),
         lastMessage: 'Group created',
-        lastMessageTime: Date.now()
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp()
     });
     return newChat.id;
 };
 
 export const sendMessage = async (chatId: string, senderId: string, senderName: string, content: string) => {
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
-    await addDoc(messagesRef, {
-        senderId,
-        senderName,
-        content,
-        createdAt: Date.now()
-    });
+    try {
+        const messagesRef = collection(db, 'chats', chatId, 'messages');
+        await addDoc(messagesRef, {
+            senderId,
+            senderName,
+            content,
+            conversationId: chatId,
+            createdAt: serverTimestamp()
+        });
 
-    // Update chat metadata
-    const chatRef = doc(db, 'chats', chatId);
-    await updateDoc(chatRef, {
-        lastMessage: content,
-        lastMessageTime: Date.now()
-    });
+        // Update chat metadata
+        const chatRef = doc(db, 'chats', chatId);
+        await updateDoc(chatRef, {
+            lastMessage: content,
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+    } catch (error: any) {
+        console.error('Error sending message:', error);
+        throw new Error(error?.message || 'Failed to send message.');
+    }
 };
 
 export const subscribeToChat = (chatId: string, callback: (messages: ChatMessage[]) => void) => {
@@ -338,10 +403,14 @@ export const subscribeToChat = (chatId: string, callback: (messages: ChatMessage
     const q = query(messagesRef, orderBy('createdAt', 'asc'), limit(100));
 
     return onSnapshot(q, (snapshot) => {
-        const messages = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as ChatMessage));
+        const messages = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toMillis ? data.createdAt.toMillis() : (data.createdAt || Date.now())
+            } as ChatMessage;
+        });
         callback(messages);
     });
 };
@@ -351,10 +420,14 @@ export const subscribeToUserChats = (userId: string, callback: (chats: ChatRoom[
     const q = query(chatsRef, where('participants', 'array-contains', userId), orderBy('lastMessageTime', 'desc'));
 
     return onSnapshot(q, (snapshot) => {
-        const chats = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as ChatRoom));
+        const chats = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                lastMessageTime: data.lastMessageTime?.toMillis ? data.lastMessageTime.toMillis() : (data.lastMessageTime || Date.now())
+            } as ChatRoom;
+        });
         callback(chats);
     });
 };

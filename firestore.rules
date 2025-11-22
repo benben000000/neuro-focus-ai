@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Chat Rules
+    match /chats/{chatId} {
+      // Only participants can read the chat metadata
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      
+      // Participants can create a chat if they include themselves
+      allow create: if isSignedIn() && request.resource.data.participants.hasAll([request.auth.uid]);
+      
+      // Participants can update the chat (e.g. lastMessage)
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants;
+
+      // Messages Subcollection
+      match /messages/{messageId} {
+        // Only participants of the parent chat can read messages
+        allow read: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        
+        // Only participants of the parent chat can send messages
+        allow create: if isSignedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+      }
+    }
+
+    // Other collections - Allow open access to maintain existing functionality
+    // In a real production app, these should be locked down too
+    match /users/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /posts/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /stories/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -78,12 +78,13 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                     {Object.entries(groupedStories).map(([authorId, userStories]) => {
                         if (authorId === currentUser?.uid) return null; // Skip own story in list for now
                         const story = userStories[0]; // Show latest or first
+                        const avatarUrl = story.mediaUrls?.[0] || story.authorPhoto;
                         return (
                             <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
                                 <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
                                     <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white dark:bg-slate-800">
-                                        {story.authorPhoto ? (
-                                            <img src={story.authorPhoto} className="w-full h-full object-cover" />
+                                        {avatarUrl ? (
+                                            <img src={avatarUrl} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center font-bold text-slate-400">
                                                 {story.authorName[0]}
@@ -134,7 +135,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
 
                         {/* Main Content */}
                         <div className="flex-1 relative bg-black flex items-center justify-center">
-                            <img src={activeStory.mediaUrl} className="max-w-full max-h-full object-contain" />
+                            <img src={activeStory.mediaUrls?.[0] || activeStory.mediaUrl} className="max-w-full max-h-full object-contain" />
 
                             {/* Navigation Overlays */}
                             <div className="absolute inset-y-0 left-0 w-1/3" onClick={handlePrevStory} />

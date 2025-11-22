@@ -40,9 +40,11 @@ export interface SocialPost {
     authorName: string;
     authorPhoto?: string;
     content: string;
-    mediaUrl?: string; // Added for image posts
+    mediaUrl?: string; // Primary image for backward compatibility
+    mediaUrls?: string[]; // Full gallery for multi-photo posts
     location?: string; // Added for location tag
     type: 'status' | 'progress';
+    audience?: 'public' | 'friends' | 'private';
     stats?: {
         subject: string;
         duration: number; // seconds
@@ -67,6 +69,8 @@ export interface Story {
     authorName: string;
     authorPhoto?: string;
     mediaUrl: string;
+    mediaUrls?: string[];
+    audience?: 'public' | 'friends' | 'private';
     createdAt: number;
     expiresAt: number;
     viewedBy?: string[];

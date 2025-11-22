@@ -4,7 +4,7 @@ import { useProfile } from '../contexts/ProfileContext';
 import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
 import { StoryTray } from './StoryTray';
-import { CreateMediaModal } from './CreateMediaModal';
+import { UnifiedComposer } from './UnifiedComposer';
 
 const timeAgo = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -22,8 +22,8 @@ export function SocialFeed() {
     const [posts, setPosts] = useState<SocialPost[]>([]);
     const [optimisticPosts, setOptimisticPosts] = useState<SocialPost[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    const [createMode, setCreateMode] = useState<'post' | 'story'>('post');
+    const [isComposerOpen, setIsComposerOpen] = useState(false);
+    const [composerTarget, setComposerTarget] = useState<'feed' | 'story'>('feed');
 
     // Sidebar states
     const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
@@ -61,9 +61,9 @@ export function SocialFeed() {
         await toggleLike(postId, currentUser.uid);
     };
 
-    const openCreateModal = (mode: 'post' | 'story') => {
-        setCreateMode(mode);
-        setIsCreateModalOpen(true);
+    const openComposer = (target: 'feed' | 'story') => {
+        setComposerTarget(target);
+        setIsComposerOpen(true);
     };
 
     const handlePostCreated = (newPost: SocialPost) => {
@@ -80,11 +80,11 @@ export function SocialFeed() {
             {/* Main Feed Column */}
             <div className="lg:col-span-2 max-w-xl mx-auto w-full">
                 {/* Stories */}
-                <StoryTray onCreateStory={() => openCreateModal('story')} />
+                <StoryTray onCreateStory={() => openComposer('story')} />
 
                 {/* Create Post Trigger (Mobile/Quick Access) */}
                 <div
-                    onClick={() => openCreateModal('post')}
+                    onClick={() => openComposer('feed')}
                     className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm mb-6 flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                     <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
@@ -128,11 +128,15 @@ export function SocialFeed() {
                                 </div>
 
                                 {/* Post Media */}
-                                {post.mediaUrl && (
-                                    <div className="w-full aspect-square bg-black flex items-center justify-center">
-                                        <img src={post.mediaUrl} className="max-w-full max-h-full object-contain" />
-                                    </div>
-                                )}
+                                {(() => {
+                                    const mediaSrc = post.mediaUrls?.[0] || post.mediaUrl;
+                                    if (!mediaSrc) return null;
+                                    return (
+                                        <div className="w-full aspect-square bg-black flex items-center justify-center">
+                                            <img src={mediaSrc} className="max-w-full max-h-full object-contain" />
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Post Actions */}
                                 <div className="p-3">
@@ -240,10 +244,10 @@ export function SocialFeed() {
                 </div>
             </div>
 
-            <CreateMediaModal
-                isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
-                type={createMode}
+            <UnifiedComposer
+                isOpen={isComposerOpen}
+                onClose={() => setIsComposerOpen(false)}
+                initialTarget={composerTarget}
                 onPostCreated={handlePostCreated}
             />
         </div>

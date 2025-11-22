@@ -100,6 +100,14 @@ export interface ChatRoom {
     name?: string; // for groups
     lastMessage?: string;
     lastMessageTime?: number;
+    lastSenderId?: string;
+    participantKey?: string;
+    participantsInfo?: {
+        [uid: string]: {
+            displayName: string;
+            photoURL?: string;
+        }
+    };
 }
 
 // --- PROFILE FUNCTIONS ---
@@ -385,15 +393,56 @@ export const dismissShare = async (shareId: string) => {
 
 // --- CHAT FUNCTIONS ---
 
+export const createOrGetDirectChat = async (
+    currentUserId: string,
+    currentUserInfo: { displayName: string; photoURL?: string },
+    otherUserId: string,
+    otherUserInfo: { displayName: string; photoURL?: string }
+) => {
+    const chatsRef = collection(db, 'chats');
+    const participantKey = [currentUserId, otherUserId].sort().join('_');
+
+    // Check for existing chat
+    const q = query(
+        chatsRef,
+        where('participantKey', '==', participantKey),
+        where('type', '==', 'direct')
+    );
+    const snapshot = await getDocs(q);
+
+    if (!snapshot.empty) {
+        return snapshot.docs[0].id;
+    }
+
+    // Create new chat
+    const newChat = await addDoc(chatsRef, {
+        type: 'direct',
+        participants: [currentUserId, otherUserId],
+        participantKey,
+        participantsInfo: {
+            [currentUserId]: currentUserInfo,
+            [otherUserId]: otherUserInfo
+        },
+        createdAt: Date.now(),
+        lastMessage: '',
+        lastMessageTime: Date.now(),
+        lastSenderId: ''
+    });
+
+    return newChat.id;
+};
+
 export const createGroupChat = async (name: string, participantIds: string[]) => {
     const chatsRef = collection(db, 'chats');
     const newChat = await addDoc(chatsRef, {
         type: 'group',
         name,
         participants: participantIds,
+        participantKey: null,
         createdAt: Date.now(),
         lastMessage: 'Group created',
-        lastMessageTime: Date.now()
+        lastMessageTime: Date.now(),
+        lastSenderId: ''
     });
     return newChat.id;
 };
@@ -411,13 +460,14 @@ export const sendMessage = async (chatId: string, senderId: string, senderName: 
     const chatRef = doc(db, 'chats', chatId);
     await updateDoc(chatRef, {
         lastMessage: content,
-        lastMessageTime: Date.now()
+        lastMessageTime: Date.now(),
+        lastSenderId: senderId
     });
 };
 
 export const subscribeToChat = (chatId: string, callback: (messages: ChatMessage[]) => void) => {
     const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('createdAt', 'asc'), limit(100));
+    const q = query(messagesRef, orderBy('createdAt', 'asc'));
 
     return onSnapshot(q, (snapshot) => {
         const messages = snapshot.docs.map(doc => ({

@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost } from '../services/social';
+import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, setVerifiedBadge, searchUsers, UserProfile } from '../services/social';
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Shield, Search } from 'lucide-react';
 
 export function Profile() {
     const { currentUser } = useAuth();
@@ -17,6 +17,10 @@ export function Profile() {
     const [saveLoading, setSaveLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    const [adminSearch, setAdminSearch] = useState('');
+    const [adminSearchResults, setAdminSearchResults] = useState<UserProfile[]>([]);
+    const [adminMessage, setAdminMessage] = useState('');
 
     const [userPosts, setUserPosts] = useState<SocialPost[]>([]);
     const [layoutMode, setLayoutMode] = useState<'grid' | 'masonry'>('grid');
@@ -98,6 +102,30 @@ export function Profile() {
             clearErrorTimeout();
         };
     }, []);
+
+    const handleAdminSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!adminSearch.trim()) return;
+        const results = await searchUsers(adminSearch);
+        setAdminSearchResults(results);
+    };
+
+    const toggleVerify = async (targetUser: UserProfile) => {
+        if (!currentUser) return;
+        if (!window.confirm(`Are you sure you want to ${targetUser.isVerified ? 'unverify' : 'verify'} ${targetUser.displayName}?`)) return;
+
+        try {
+            await setVerifiedBadge(currentUser.uid, targetUser.uid, !targetUser.isVerified);
+            setAdminMessage(`Successfully ${targetUser.isVerified ? 'unverified' : 'verified'} ${targetUser.displayName}`);
+            // Update local state results
+            setAdminSearchResults(prev => prev.map(u => u.uid === targetUser.uid ? { ...u, isVerified: !u.isVerified } : u));
+
+            // Clear message after 3s
+            setTimeout(() => setAdminMessage(''), 3000);
+        } catch (e: any) {
+            setAdminMessage('Error: ' + e.message);
+        }
+    };
 
     const handleSave = async () => {
         if (!currentUser || !profile) return;
@@ -283,7 +311,10 @@ export function Profile() {
                             </div>
                         ) : (
                             <div>
-                                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{profile?.displayName}</h1>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{profile?.displayName}</h1>
+                                    {profile?.isVerified && <CheckCircle size={24} className="text-white fill-blue-500" />}
+                                </div>
                                 <p className="text-slate-500 dark:text-slate-400 max-w-xl">{profile?.bio || "No bio yet."}</p>
                             </div>
                         )}
@@ -341,9 +372,73 @@ export function Profile() {
                             <span className="text-slate-600 dark:text-slate-300">Current streak</span>
                             <span className="font-semibold text-slate-900 dark:text-white">{currentStreakDays} days</span>
                         </div>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-300">Followers</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{profile?.followersCount || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-300">Following</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{profile?.followingCount || 0}</span>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Admin Control Surface */}
+            {currentUser?.email === 'bmgarcia0121@gmail.com' && (
+                <div className="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Shield className="text-indigo-400" />
+                        <h2 className="font-bold text-lg">Admin Controls</h2>
+                    </div>
+                    
+                    <form onSubmit={handleAdminSearch} className="relative mb-4">
+                        <input
+                            type="text"
+                            value={adminSearch}
+                            onChange={(e) => setAdminSearch(e.target.value)}
+                            placeholder="Search users to verify..."
+                            className="w-full bg-slate-800 border-0 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none text-white placeholder-slate-500"
+                        />
+                        <Search size={16} className="absolute left-3 top-2.5 text-slate-500" />
+                    </form>
+
+                    {adminMessage && (
+                        <div className={`mb-4 p-3 rounded-lg text-sm ${adminMessage.startsWith('Error') ? 'bg-red-900/50 text-red-200' : 'bg-emerald-900/50 text-emerald-200'}`}>
+                            {adminMessage}
+                        </div>
+                    )}
+
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {adminSearchResults.map(user => (
+                            <div key={user.uid} className="flex items-center justify-between bg-slate-800/50 p-2 rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
+                                        {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-1">
+                                            <p className="text-sm font-bold">{user.displayName}</p>
+                                            {user.isVerified && <CheckCircle size={12} className="text-white fill-blue-500" />}
+                                        </div>
+                                        <p className="text-xs text-slate-400">{user.email}</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={() => toggleVerify(user)}
+                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+                                        user.isVerified 
+                                            ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
+                                            : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
+                                    }`}
+                                >
+                                    {user.isVerified ? 'Unverify' : 'Verify'}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

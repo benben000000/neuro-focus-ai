@@ -13,7 +13,9 @@ import {
     Timestamp,
     updateDoc,
     arrayUnion,
-    deleteDoc
+    deleteDoc,
+    runTransaction,
+    arrayRemove
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -33,6 +35,15 @@ export interface UserProfile {
     friends?: string[]; // List of friend UIDs
     friendRequests?: string[]; // List of UIDs who sent requests
     hasCompletedOnboarding?: boolean;
+    // Follow system
+    followers?: string[];
+    following?: string[];
+    followersCount?: number;
+    followingCount?: number;
+    // Verification
+    isVerified?: boolean;
+    verifiedBy?: string;
+    verifiedAt?: number;
 }
 
 // Rich media descriptor used by the unified composer for posts & stories
@@ -120,7 +131,12 @@ export const createUserProfile = async (user: any) => {
             level: 1,
             xp: 0,
             joinedAt: new Date().toISOString(),
-            hasCompletedOnboarding: false
+            hasCompletedOnboarding: false,
+            followers: [],
+            following: [],
+            followersCount: 0,
+            followingCount: 0,
+            isVerified: false
         };
         await setDoc(userRef, newProfile);
         return newProfile;
@@ -407,6 +423,92 @@ export const acceptFriendRequest = async (currentUid: string, friendUid: string)
 
     await updateDoc(friendUserRef, {
         friends: arrayUnion(currentUid)
+    });
+};
+
+export const followUser = async (currentUid: string, targetUid: string) => {
+    if (currentUid === targetUid) return;
+
+    await runTransaction(db, async (transaction) => {
+        const currentUserRef = doc(db, 'users', currentUid);
+        const targetUserRef = doc(db, 'users', targetUid);
+
+        const currentUserSnap = await transaction.get(currentUserRef);
+        const targetUserSnap = await transaction.get(targetUserRef);
+
+        if (!currentUserSnap.exists() || !targetUserSnap.exists()) {
+            throw new Error("User not found");
+        }
+
+        const currentUserData = currentUserSnap.data() as UserProfile;
+
+        const currentFollowing = currentUserData.following || [];
+
+        if (currentFollowing.includes(targetUid)) {
+            return; // Already following
+        }
+
+        transaction.update(currentUserRef, {
+            following: arrayUnion(targetUid),
+            followingCount: (currentUserData.followingCount || 0) + 1
+        });
+
+        transaction.update(targetUserRef, {
+            followers: arrayUnion(currentUid),
+            followersCount: (targetUserSnap.data().followersCount || 0) + 1
+        });
+    });
+};
+
+export const unfollowUser = async (currentUid: string, targetUid: string) => {
+    if (currentUid === targetUid) return;
+
+    await runTransaction(db, async (transaction) => {
+        const currentUserRef = doc(db, 'users', currentUid);
+        const targetUserRef = doc(db, 'users', targetUid);
+
+        const currentUserSnap = await transaction.get(currentUserRef);
+        const targetUserSnap = await transaction.get(targetUserRef);
+
+        if (!currentUserSnap.exists() || !targetUserSnap.exists()) {
+            throw new Error("User not found");
+        }
+
+        const currentUserData = currentUserSnap.data() as UserProfile;
+        const targetUserData = targetUserSnap.data() as UserProfile;
+
+        const currentFollowing = currentUserData.following || [];
+
+        if (!currentFollowing.includes(targetUid)) {
+            return; // Not following
+        }
+
+        transaction.update(currentUserRef, {
+            following: arrayRemove(targetUid),
+            followingCount: Math.max((currentUserData.followingCount || 1) - 1, 0)
+        });
+
+        transaction.update(targetUserRef, {
+            followers: arrayRemove(currentUid),
+            followersCount: Math.max((targetUserData.followersCount || 1) - 1, 0)
+        });
+    });
+};
+
+export const setVerifiedBadge = async (adminUid: string, targetUid: string, isVerified: boolean) => {
+    const adminEmail = 'bmgarcia0121@gmail.com';
+    
+    const adminRef = doc(db, 'users', adminUid);
+    const adminSnap = await getDoc(adminRef);
+    if (!adminSnap.exists() || adminSnap.data().email !== adminEmail) {
+        throw new Error("Unauthorized: Only the specified admin can change verification status.");
+    }
+
+    const targetUserRef = doc(db, 'users', targetUid);
+    await updateDoc(targetUserRef, {
+        isVerified: isVerified,
+        verifiedBy: isVerified ? adminUid : null,
+        verifiedAt: isVerified ? Date.now() : null
     });
 };
 

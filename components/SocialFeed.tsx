@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile } from '../services/social';
-import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
+import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, followUser, unfollowUser, getAllUsers } from '../services/social';
+import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, CheckCircle } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
 import { MediaCarousel } from './MediaCarousel';
@@ -30,6 +30,13 @@ export function SocialFeed() {
     const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+    const [verifiedUsers, setVerifiedUsers] = useState<Set<string>>(new Set());
+
+    useEffect(() => {
+        getAllUsers().then(users => {
+            setVerifiedUsers(new Set(users.filter(u => u.isVerified).map(u => u.uid)));
+        });
+    }, []);
 
     useEffect(() => {
         const unsubscribe = subscribeToFeed((newPosts) => {
@@ -81,7 +88,7 @@ export function SocialFeed() {
             {/* Main Feed Column */}
             <div className="lg:col-span-2 max-w-xl mx-auto w-full">
                 {/* Stories */}
-                <StoryTray onCreateStory={() => openCreateModal('story')} />
+                <StoryTray onCreateStory={() => openCreateModal('story')} verifiedUsers={verifiedUsers} />
 
                 {/* Create Post Trigger (Mobile/Quick Access) */}
                 <div
@@ -119,7 +126,10 @@ export function SocialFeed() {
                                             </div>
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer">{post.authorName}</h3>
+                                            <div className="flex items-center gap-1">
+                                                <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer">{post.authorName}</h3>
+                                                {verifiedUsers.has(post.authorId) && <CheckCircle size={14} className="text-white fill-blue-500" />}
+                                            </div>
                                             {post.location && <p className="text-xs text-slate-500">{post.location}</p>}
                                         </div>
                                     </div>
@@ -213,7 +223,10 @@ export function SocialFeed() {
                             {profile?.photoURL && <img src={profile.photoURL} className="w-full h-full object-cover" />}
                         </div>
                         <div>
-                            <p className="font-bold text-slate-900 dark:text-white">{profile?.displayName || 'Student'}</p>
+                            <div className="flex items-center gap-1">
+                                <p className="font-bold text-slate-900 dark:text-white">{profile?.displayName || 'Student'}</p>
+                                {profile?.isVerified && <CheckCircle size={16} className="text-white fill-blue-500" />}
+                            </div>
                             <p className="text-sm text-slate-500">{currentUser?.email}</p>
                         </div>
                     </div>
@@ -239,20 +252,38 @@ export function SocialFeed() {
                         <button className="text-xs font-bold text-slate-900 dark:text-white">See All</button>
                     </div>
                     <div className="space-y-3">
-                        {suggestions.map(user => (
-                            <div key={user.uid} className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                                        {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+                        {suggestions.map(user => {
+                            const isFollowing = profile?.following?.includes(user.uid);
+                            return (
+                                <div key={user.uid} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                            {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-1">
+                                                <p className="text-sm font-bold text-slate-900 dark:text-white">{user.displayName}</p>
+                                                {user.isVerified && <CheckCircle size={14} className="text-white fill-blue-500" />}
+                                            </div>
+                                            <p className="text-xs text-slate-500">New to NeuroFocus</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{user.displayName}</p>
-                                        <p className="text-xs text-slate-500">New to NeuroFocus</p>
-                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            if (!currentUser) return;
+                                            if (isFollowing) {
+                                                await unfollowUser(currentUser.uid, user.uid);
+                                            } else {
+                                                await followUser(currentUser.uid, user.uid);
+                                            }
+                                        }}
+                                        className={`text-xs font-bold ${isFollowing ? 'text-slate-500' : 'text-indigo-600 hover:text-indigo-800'}`}
+                                    >
+                                        {isFollowing ? 'Following' : 'Follow'}
+                                    </button>
                                 </div>
-                                <button className="text-xs font-bold text-indigo-600 hover:text-indigo-800">Follow</button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 

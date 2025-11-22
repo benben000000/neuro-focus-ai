@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Story, subscribeToStories } from '../services/social';
-import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
 
 interface StoryTrayProps {
     onCreateStory: () => void;
+    verifiedUsers?: Set<string>;
 }
 
-export function StoryTray({ onCreateStory }: StoryTrayProps) {
+export function StoryTray({ onCreateStory, verifiedUsers }: StoryTrayProps) {
     const { currentUser } = useAuth();
     const [stories, setStories] = useState<Story[]>([]);
     const [groupedStories, setGroupedStories] = useState<Record<string, Story[]>>({});
@@ -81,7 +82,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                         const story = userStories[0]; // Show latest or first
                         return (
                             <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
-                                <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
+                                <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600 relative">
                                     <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white dark:bg-slate-800">
                                         {story.authorPhoto ? (
                                             <img src={story.authorPhoto} className="w-full h-full object-cover" />
@@ -91,6 +92,11 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                                             </div>
                                         )}
                                     </div>
+                                    {verifiedUsers?.has(authorId) && (
+                                        <div className="absolute bottom-0 right-0 bg-white dark:bg-slate-900 rounded-full p-0.5">
+                                            <CheckCircle size={14} className="text-white fill-blue-500" />
+                                        </div>
+                                    )}
                                 </div>
                                 <span className="text-xs font-medium text-slate-900 dark:text-white max-w-[70px] truncate">{story.authorName}</span>
                             </div>
@@ -130,7 +136,10 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                                     <div className="w-full h-full bg-slate-700" />
                                 )}
                             </div>
-                            <span className="font-bold text-white shadow-sm">{activeStory.authorName}</span>
+                            <div className="flex items-center gap-1">
+                                <span className="font-bold text-white shadow-sm">{activeStory.authorName}</span>
+                                {verifiedUsers?.has(activeStory.authorId) && <CheckCircle size={16} className="text-white fill-blue-500" />}
+                            </div>
                         </div>
 
                         {/* Main Content */}

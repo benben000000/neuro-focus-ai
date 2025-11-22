@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line
 } from 'recharts';
-import { BookOpen, Brain, Trophy, Activity, Play, Square, Timer, ChevronRight } from 'lucide-react';
-import { FileAttachment, UserProgress, StudySessionStats } from '../types';
+import { BookOpen, Brain, Trophy, Activity, Timer, ChevronRight } from 'lucide-react';
+import { FileAttachment, UserProgress } from '../types';
 import { identifyDocumentSubject } from '../services/gemini';
-import { getProgress, logSession, formatTime } from '../services/learning';
+import { getProgress } from '../services/learning';
 import { FileUploader } from './FileUploader';
+import { usePomodoro } from '../contexts/PomodoroContext';
 
 interface DashboardProps {
   attachments: FileAttachment[];
@@ -20,16 +21,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [complexity, setComplexity] = useState(0);
 
-  // Session Timer State
-  const [isSessionActive, setIsSessionActive] = useState(false);
-  const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [sessionSubject, setSessionSubject] = useState('General Knowledge');
-  const timerRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number>(0);
+  const { 
+      isActive, 
+      timeLeft, 
+      mode, 
+      setSessionSubject, 
+      formatTime, 
+      toggleTimer,
+      setWidgetVisible
+  } = usePomodoro();
 
   useEffect(() => {
-    setProgress(getProgress());
-  }, []);
+    // Refresh progress when session might have been logged or on mount
+    // Since progress is local state initialized from getProgress(), we need to update it.
+    // Ideally we would subscribe to changes or use a Context for progress too, but for now:
+    const interval = setInterval(() => {
+        const newProgress = getProgress();
+        if (JSON.stringify(newProgress) !== JSON.stringify(progress)) {
+            setProgress(newProgress);
+        }
+    }, 2000); // Poll for updates every 2s
+    
+    return () => clearInterval(interval);
+  }, [progress]);
 
   useEffect(() => {
     const analyzeContext = async () => {
@@ -50,46 +64,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
     analyzeContext();
   }, [attachments.length]);
 
+  // Sync subject with Pomodoro context
   useEffect(() => {
-    if (isSessionActive) {
-      timerRef.current = window.setInterval(() => {
-        setSessionSeconds(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [isSessionActive]);
+      setSessionSubject(currentSubject);
+  }, [currentSubject, setSessionSubject]);
 
-  const handleStartSession = () => {
-    startTimeRef.current = Date.now();
-    setSessionSubject(currentSubject);
-    setSessionSeconds(0);
-    setIsSessionActive(true);
-  };
-
-  const handleEndSession = () => {
-    setIsSessionActive(false);
-    const endTime = Date.now();
-    const duration = sessionSeconds;
-
-    if (duration > 10) {
-      const newSession: StudySessionStats = {
-        id: Date.now().toString(),
-        subject: sessionSubject,
-        startTime: startTimeRef.current,
-        endTime,
-        durationSeconds: duration,
-        toolsUsed: ['Timer'],
-        xpEarned: Math.floor(duration / 60) * 10,
-        mastery: 0,
-        lastStudied: new Date().toISOString(),
-        hoursSpent: duration / 3600
-      };
-      const updatedProgress = logSession(newSession);
-      setProgress(updatedProgress);
-    }
-    setSessionSeconds(0);
+  const getElapsedTime = () => {
+      const totalDuration = mode === 'work' ? 25 * 60 : (mode === 'shortBreak' ? 5 * 60 : 15 * 60);
+      return formatTime(totalDuration - timeLeft);
   };
 
   const activityData = progress.sessions.slice(0, 7).reverse().map((s, i) => ({
@@ -132,34 +114,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
         </div>
       </div>
 
-      {/* Live Activity / Session Timer */}
-      <div className="bg-slate-900 dark:bg-slate-800 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isSessionActive ? 'bg-indigo-500 animate-pulse' : 'bg-slate-800 border border-slate-700'}`}>
-              <Timer size={24} className={isSessionActive ? 'text-white' : 'text-slate-400'} />
-            </div>
-            <div>
-              <h2 className="font-bold text-lg">{isSessionActive ? 'Focus Session' : 'Start Focusing'}</h2>
-              <p className="text-slate-400 text-sm font-mono">
-                {isSessionActive ? formatTime(sessionSeconds) : 'Ready to learn?'}
-              </p>
-            </div>
+      {/* Live Activity / Session Status Chip */}
+      {isActive && (
+          <div className="flex items-center justify-between bg-indigo-50 dark:bg-slate-800/50 border border-indigo-100 dark:border-slate-700 rounded-xl p-4 animate-in slide-in-from-top-2">
+              <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {mode === 'work' ? 'Focus session running' : 'Break time'}
+                  </span>
+                  <span className="text-sm font-mono text-slate-500 dark:text-slate-400">
+                      • {getElapsedTime()} elapsed
+                  </span>
+              </div>
+              <div className="flex items-center gap-3">
+                   <button 
+                      onClick={() => setWidgetVisible(true)}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                   >
+                      Show Timer
+                   </button>
+              </div>
           </div>
-
-          <button
-            onClick={isSessionActive ? handleEndSession : handleStartSession}
-            className={`px-6 py-2 rounded-xl font-bold transition-all ${isSessionActive
-                ? 'bg-rose-500 hover:bg-rose-600 text-white'
-                : 'bg-white text-slate-900 hover:bg-slate-100'
-              }`}
-          >
-            {isSessionActive ? 'End' : 'Start'}
-          </button>
-        </div>
-      </div>
+      )}
+      
+      {!isActive && (
+         <div className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center justify-between">
+             <div className="flex items-center gap-3">
+                <div className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500">
+                    <Timer size={16} />
+                </div>
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Ready to focus?</span>
+             </div>
+             <button 
+                onClick={() => {
+                    setWidgetVisible(true);
+                    toggleTimer();
+                }}
+                className="text-sm font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+             >
+                Start Session
+             </button>
+         </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

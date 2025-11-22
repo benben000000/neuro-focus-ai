@@ -13,6 +13,7 @@ import {
     Timestamp,
     updateDoc,
     arrayUnion,
+    arrayRemove,
     deleteDoc
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
@@ -32,6 +33,7 @@ export interface UserProfile {
     joinedAt: string;
     friends?: string[]; // List of friend UIDs
     friendRequests?: string[]; // List of UIDs who sent requests
+    savedPostIds?: string[];
     hasCompletedOnboarding?: boolean;
 }
 
@@ -120,6 +122,7 @@ export const createUserProfile = async (user: any) => {
             level: 1,
             xp: 0,
             joinedAt: new Date().toISOString(),
+            savedPostIds: [],
             hasCompletedOnboarding: false
         };
         await setDoc(userRef, newProfile);
@@ -299,6 +302,47 @@ export const subscribeToUserPosts = (userId: string, callback: (posts: SocialPos
         } as SocialPost));
         callback(posts);
     });
+};
+
+export const toggleSavePost = async (userId: string, postId: string) => {
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+        const data = userSnap.data() as UserProfile;
+        const saved = data.savedPostIds || [];
+        
+        if (saved.includes(postId)) {
+            await updateDoc(userRef, {
+                savedPostIds: arrayRemove(postId)
+            });
+        } else {
+            await updateDoc(userRef, {
+                savedPostIds: arrayUnion(postId)
+            });
+        }
+    }
+};
+
+export const isPostSaved = (profile: UserProfile | null, postId: string) => {
+    return profile?.savedPostIds?.includes(postId) || false;
+};
+
+export const fetchSavedPosts = async (userId: string) => {
+    const userProfile = await getUserProfile(userId);
+    if (!userProfile || !userProfile.savedPostIds || userProfile.savedPostIds.length === 0) {
+        return [];
+    }
+    
+    const promises = userProfile.savedPostIds.map(id => getDoc(doc(db, 'posts', id)));
+    const snapshots = await Promise.all(promises);
+    
+    return snapshots
+        .filter(snap => snap.exists())
+        .map(snap => ({
+            id: snap.id,
+            ...snap.data()
+        } as SocialPost));
 };
 
 // --- SHARING FUNCTIONS ---

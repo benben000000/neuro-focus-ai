@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost } from '../services/social';
+import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved } from '../services/social';
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark } from 'lucide-react';
 
 export function Profile() {
     const { currentUser } = useAuth();
@@ -19,8 +19,10 @@ export function Profile() {
     const [success, setSuccess] = useState('');
 
     const [userPosts, setUserPosts] = useState<SocialPost[]>([]);
+    const [savedPosts, setSavedPosts] = useState<SocialPost[]>([]);
+    const [loadingSaved, setLoadingSaved] = useState(false);
     const [layoutMode, setLayoutMode] = useState<'grid' | 'masonry'>('grid');
-    const [activeFilter, setActiveFilter] = useState<'all' | 'study' | 'notes' | 'highlights'>('all');
+    const [activeFilter, setActiveFilter] = useState<'all' | 'study' | 'notes' | 'highlights' | 'saved'>('all');
     const [selectedPostIndex, setSelectedPostIndex] = useState<number | null>(null);
     const [progressSummary, setProgressSummary] = useState<UserProgress | null>(null);
     const [viewerTouchStartX, setViewerTouchStartX] = useState<number | null>(null);
@@ -82,6 +84,23 @@ export function Profile() {
 
         return () => unsubscribe();
     }, [currentUser]);
+
+    useEffect(() => {
+        const loadSaved = async () => {
+            if (activeFilter === 'saved' && currentUser) {
+                setLoadingSaved(true);
+                try {
+                    const posts = await fetchSavedPosts(currentUser.uid);
+                    setSavedPosts(posts);
+                } catch (err) {
+                    console.error(err);
+                } finally {
+                    setLoadingSaved(false);
+                }
+            }
+        };
+        loadSaved();
+    }, [activeFilter, currentUser, profile?.savedPostIds]);
 
     useEffect(() => {
         try {
@@ -152,8 +171,9 @@ export function Profile() {
     };
 
     const sortedPosts = [...userPosts].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const sortedSavedPosts = [...savedPosts].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-    const filteredPosts = sortedPosts.filter(post => {
+    const filteredPosts = activeFilter === 'saved' ? sortedSavedPosts : sortedPosts.filter(post => {
         if (activeFilter === 'all') return true;
         return getPostCategory(post) === activeFilter;
     });
@@ -387,7 +407,8 @@ export function Profile() {
                                 { key: 'all', label: 'All' },
                                 { key: 'study', label: 'Study' },
                                 { key: 'notes', label: 'Notes' },
-                                { key: 'highlights', label: 'Highlights' }
+                                { key: 'highlights', label: 'Highlights' },
+                                { key: 'saved', label: 'Saved' }
                             ] as const
                         ).map(tab => (
                             <button
@@ -418,9 +439,15 @@ export function Profile() {
                     </div>
                 </div>
 
-                {filteredPosts.length === 0 ? (
+                {loadingSaved ? (
                     <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-                        No posts yet in this view. Share a study moment from the Community tab to build your portfolio.
+                        Loading saved posts...
+                    </div>
+                ) : filteredPosts.length === 0 ? (
+                    <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                        {activeFilter === 'saved' 
+                            ? 'No saved posts yet. Bookmark posts from the feed to see them here.' 
+                            : 'No posts yet in this view. Share a study moment from the Community tab to build your portfolio.'}
                     </div>
                 ) : (
                     <div
@@ -526,10 +553,10 @@ export function Profile() {
                             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex items-center justify-center text-sm font-semibold">
-                                        {profile?.photoURL ? (
-                                            <img src={profile.photoURL} className="w-full h-full object-cover" />
+                                        {activePost.authorPhoto ? (
+                                            <img src={activePost.authorPhoto} className="w-full h-full object-cover" />
                                         ) : (
-                                            profile?.displayName?.charAt(0).toUpperCase() || 'U'
+                                            activePost.authorName?.charAt(0).toUpperCase() || 'U'
                                         )}
                                     </div>
                                     <div className="flex flex-col">
@@ -578,6 +605,13 @@ export function Profile() {
                                     <button className="flex items-center gap-1 text-slate-400">
                                         <MessageCircle size={16} />
                                         <span className="text-xs">0 comments</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => currentUser && toggleSavePost(currentUser.uid, activePost.id)}
+                                        className={`flex items-center gap-1 ${isPostSaved(profile, activePost.id) ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'}`}
+                                    >
+                                        <Bookmark size={16} fill={isPostSaved(profile, activePost.id) ? "currentColor" : "none"} />
+                                        <span className="text-xs">{isPostSaved(profile, activePost.id) ? 'Saved' : 'Save'}</span>
                                     </button>
                                 </div>
 

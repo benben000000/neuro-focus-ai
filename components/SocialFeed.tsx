@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile } from '../services/social';
+import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
@@ -180,8 +180,11 @@ export function SocialFeed() {
                                                 <Share2 size={24} />
                                             </button>
                                         </div>
-                                        <button className="text-slate-900 dark:text-white hover:text-slate-600">
-                                            <Bookmark size={24} />
+                                        <button 
+                                            onClick={() => currentUser && toggleSavePost(currentUser.uid, post.id)}
+                                            className={`transition-transform active:scale-125 ${isPostSaved(profile, post.id) ? 'text-indigo-600' : 'text-slate-900 dark:text-white hover:text-slate-600'}`}
+                                        >
+                                            <Bookmark size={24} fill={isPostSaved(profile, post.id) ? "currentColor" : "none"} />
                                         </button>
                                     </div>
 

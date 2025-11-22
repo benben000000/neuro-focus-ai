@@ -12,7 +12,8 @@ import {
     onSnapshot,
     Timestamp,
     updateDoc,
-    arrayUnion
+    arrayUnion,
+    deleteDoc
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -34,15 +35,32 @@ export interface UserProfile {
     hasCompletedOnboarding?: boolean;
 }
 
+// Rich media descriptor used by the unified composer for posts & stories
+export interface ComposerMedia {
+    id: string;
+    url: string; // Compressed data URL or CDN URL
+    width: number;
+    height: number;
+    mimeType: string;
+}
+
 export interface SocialPost {
     id: string;
     authorId: string;
     authorName: string;
     authorPhoto?: string;
     content: string;
-    mediaUrl?: string; // Added for image posts
-    location?: string; // Added for location tag
+    // Legacy single-media field kept for backwards compatibility
+    mediaUrl?: string;
+    // New rich media array for carousels
+    media?: ComposerMedia[];
+    location?: string; // Optional location tag
     type: 'status' | 'progress';
+    // Optional semantic metadata used for profile filters & overlays
+    category?: 'study' | 'notes' | 'highlights' | 'other';
+    tags?: string[];
+    isPinned?: boolean;
+    linkedStoryId?: string;
     stats?: {
         subject: string;
         duration: number; // seconds
@@ -66,7 +84,10 @@ export interface Story {
     authorId: string;
     authorName: string;
     authorPhoto?: string;
-    mediaUrl: string;
+    // Legacy single-media field kept for backwards compatibility
+    mediaUrl?: string;
+    // New media carousel support
+    media?: ComposerMedia[];
     createdAt: number;
     expiresAt: number;
     viewedBy?: string[];
@@ -221,6 +242,16 @@ export const createPost = async (
     }
 };
 
+export const deletePost = async (postId: string) => {
+    try {
+        const postRef = doc(db, 'posts', postId);
+        await deleteDoc(postRef);
+    } catch (error: any) {
+        console.error('deletePost failed', error);
+        throw new Error(error?.message || 'Failed to delete post.');
+    }
+};
+
 export const toggleLike = async (postId: string, userId: string) => {
     const postRef = doc(db, 'posts', postId);
     const postSnap = await getDoc(postRef);
@@ -247,6 +278,19 @@ export const toggleLike = async (postId: string, userId: string) => {
 export const subscribeToFeed = (callback: (posts: SocialPost[]) => void) => {
     const postsRef = collection(db, 'posts');
     const q = query(postsRef, orderBy('createdAt', 'desc'), limit(50));
+
+    return onSnapshot(q, (snapshot) => {
+        const posts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as SocialPost));
+        callback(posts);
+    });
+};
+
+export const subscribeToUserPosts = (userId: string, callback: (posts: SocialPost[]) => void) => {
+    const postsRef = collection(db, 'posts');
+    const q = query(postsRef, where('authorId', '==', userId), orderBy('createdAt', 'desc'));
 
     return onSnapshot(q, (snapshot) => {
         const posts = snapshot.docs.map(doc => ({

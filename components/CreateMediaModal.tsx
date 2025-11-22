@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Image as ImageIcon, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { createPost, createStory, getUserProfile, SocialPost } from '../services/social';
+import { createPost, createStory, getUserProfile, SocialPost, ComposerMedia } from '../services/social';
+import { MediaCarousel } from './MediaCarousel';
 
 interface CreateMediaModalProps {
     isOpen: boolean;
@@ -14,55 +15,120 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
     const { currentUser } = useAuth();
     const [mode, setMode] = useState<'post' | 'story'>(initialType);
     const [content, setContent] = useState('');
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [media, setMedia] = useState<ComposerMedia[]>([]);
+    const [activeIndex, setActiveIndex] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const dragIndexRef = useRef<number | null>(null);
 
     // Sync mode state with type prop whenever modal opens
     useEffect(() => {
         if (isOpen) {
             setMode(initialType);
             setError(null);
+            setValidationErrors([]);
         }
     }, [isOpen, initialType]);
 
     if (!isOpen) return null;
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
+    const MAX_DIMENSION = 1600;
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+    const compressImageFile = (file: File): Promise<ComposerMedia> => {
+        return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
                 img.onload = () => {
-                    // Resize image to max 800px width/height to save space
-                    const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const maxSize = 800;
 
                     if (width > height) {
-                        if (width > maxSize) {
-                            height *= maxSize / width;
-                            width = maxSize;
+                        if (width > MAX_DIMENSION) {
+                            height *= MAX_DIMENSION / width;
+                            width = MAX_DIMENSION;
                         }
                     } else {
-                        if (height > maxSize) {
-                            width *= maxSize / height;
-                            height = maxSize;
+                        if (height > MAX_DIMENSION) {
+                            width *= MAX_DIMENSION / height;
+                            height = MAX_DIMENSION;
                         }
                     }
 
+                    const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
-                    ctx?.drawImage(img, 0, 0, width, height);
-                    setSelectedImage(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality
+
+                    if (!ctx) {
+                        reject(new Error('Failed to process image.'));
+                        return;
+                    }
+
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+
+                    resolve({
+                        id,
+                        url: dataUrl,
+                        width,
+                        height,
+                        mimeType: 'image/jpeg'
+                    });
                 };
+                img.onerror = () => reject(new Error('Unable to load image.'));
                 img.src = event.target?.result as string;
             };
+            reader.onerror = () => reject(new Error('Unable to read file.'));
             reader.readAsDataURL(file);
+        });
+    };
+
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+
+        const errors: string[] = [];
+        const processed: ComposerMedia[] = [];
+
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) {
+                errors.push(`${file.name}: Unsupported file type.`);
+                continue;
+            }
+
+            if (file.size > MAX_FILE_SIZE) {
+                errors.push(`${file.name}: File is too large. Please choose images under 10MB.`);
+                continue;
+            }
+
+            try {
+                const mediaItem = await compressImageFile(file);
+                processed.push(mediaItem);
+            } catch (err: any) {
+                console.error('Failed to process image', err);
+                errors.push(`${file.name}: Could not process image.`);
+            }
+        }
+
+        if (processed.length) {
+            setMedia(prev => {
+                const next = [...prev, ...processed];
+                if (prev.length === 0) {
+                    setActiveIndex(0);
+                }
+                return next;
+            });
+        }
+
+        setValidationErrors(errors);
+
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
@@ -71,12 +137,12 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             setError('You need to be signed in to share.');
             return;
         }
-        if (mode === 'post' && !content && !selectedImage) {
-            setError('Add a caption or photo to share a post.');
+        if (mode === 'post' && !content.trim() && media.length === 0) {
+            setError('Add a caption or at least one photo to share a post.');
             return;
         }
-        if (mode === 'story' && !selectedImage) {
-            setError('Stories require a photo or image.');
+        if (mode === 'story' && media.length === 0) {
+            setError('Stories require at least one photo.');
             return;
         }
 
@@ -90,16 +156,21 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 authorPhoto: userProfile?.photoURL
             };
 
-            if (mode === 'story' && selectedImage) {
+            const mediaPayload = media.length ? media : undefined;
+            const primaryMediaUrl = mediaPayload && mediaPayload.length > 0 ? mediaPayload[0].url : undefined;
+
+            if (mode === 'story' && mediaPayload) {
                 await createStory({
                     ...authorData,
-                    mediaUrl: selectedImage
+                    media: mediaPayload,
+                    mediaUrl: primaryMediaUrl
                 });
             } else {
                 const postData = {
                     ...authorData,
-                    content: content,
-                    mediaUrl: selectedImage || undefined,
+                    content: content.trim(),
+                    media: mediaPayload,
+                    mediaUrl: primaryMediaUrl,
                     type: 'status' as const
                 };
                 const docId = await createPost(postData);
@@ -118,9 +189,11 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             }
             onClose();
             setContent('');
-            setSelectedImage(null);
+            setMedia([]);
+            setActiveIndex(0);
+            setValidationErrors([]);
         } catch (error: any) {
-            console.error("Failed to create:", error);
+            console.error('Failed to create:', error);
             setError(error?.message || 'Failed to share. Please try again.');
         } finally {
             setLoading(false);
@@ -157,38 +230,111 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 {/* Content Area */}
                 <div className="p-6 space-y-4">
                     {/* Error Alert */}
-                    {error && (
+                    {(error || validationErrors.length > 0) && (
                         <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-start gap-2">
                             <AlertCircle className="text-rose-500 flex-shrink-0" size={20} />
-                            <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>
+                            <div className="space-y-1">
+                                {error && (
+                                    <p className="text-sm text-rose-700 dark:text-rose-400">{error}</p>
+                                )}
+                                {validationErrors.map((msg, idx) => (
+                                    <p key={idx} className="text-xs text-rose-600 dark:text-rose-300">
+                                        {msg}
+                                    </p>
+                                ))}
+                            </div>
                         </div>
                     )}
 
                     {/* Image Preview/Upload */}
-                    <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`w-full aspect-video rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden relative ${selectedImage ? 'border-none' : ''}`}
-                    >
-                        {selectedImage ? (
-                            <>
-                                <img src={selectedImage} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium">
-                                    Change Image
+                    <div className="space-y-3">
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`w-full ${mode === 'story' ? 'aspect-[9/16]' : 'aspect-square'} rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden relative ${media.length > 0 ? 'border-none bg-black' : ''}`}
+                        >
+                            {media.length > 0 ? (
+                                <>
+                                    <MediaCarousel
+                                        media={media}
+                                        aspect={mode === 'story' ? 'story' : 'square'}
+                                        showArrows
+                                        showDots
+                                        initialIndex={activeIndex}
+                                        onIndexChange={setActiveIndex}
+                                    />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-start justify-between px-3 py-2 pointer-events-none">
+                                        <span className="text-xs font-medium text-white/80">Tap to add more</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-slate-400 flex flex-col items-center gap-2 pointer-events-none">
+                                    <ImageIcon size={32} />
+                                    <span className="text-sm font-medium">
+                                        {mode === 'story' ? 'Add story photos' : 'Upload photos'}
+                                    </span>
+                                    <span className="text-[11px] text-slate-400">JPEGs up to ~1600px · You can add multiple</span>
                                 </div>
-                            </>
-                        ) : (
-                            <div className="text-slate-400 flex flex-col items-center gap-2">
-                                <ImageIcon size={32} />
-                                <span className="text-sm font-medium">Upload Photo</span>
+                            )}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                multiple
+                                onChange={handleImageSelect}
+                            />
+                        </div>
+
+                        {media.length > 0 && (
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                {media.map((item, index) => (
+                                    <div
+                                        key={item.id}
+                                        className={`group relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border ${index === activeIndex ? 'border-indigo-500' : 'border-slate-200 dark:border-slate-700'}`}
+                                        draggable
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveIndex(index);
+                                        }}
+                                        onDragStart={() => {
+                                            dragIndexRef.current = index;
+                                        }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            const from = dragIndexRef.current;
+                                            if (from == null || from === index) return;
+                                            setMedia(prev => {
+                                                const next = [...prev];
+                                                const [moved] = next.splice(from, 1);
+                                                next.splice(index, 0, moved);
+                                                dragIndexRef.current = index;
+                                                return next;
+                                            });
+                                        }}
+                                        onDragEnd={() => {
+                                            dragIndexRef.current = null;
+                                        }}
+                                    >
+                                        <img src={item.url} className="w-full h-full object-cover" />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setMedia(prev => {
+                                                    const next = prev.filter((_, i) => i !== index);
+                                                    const nextIndex = Math.min(activeIndex, next.length - 1);
+                                                    setActiveIndex(Math.max(nextIndex, 0));
+                                                    return next;
+                                                });
+                                            }}
+                                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         )}
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleImageSelect}
-                        />
                     </div>
 
                     {/* Caption (Post only) */}
@@ -206,7 +352,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 <div className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
                     <button
                         onClick={handleSubmit}
-                        disabled={loading || (mode === 'story' && !selectedImage) || (mode === 'post' && !content && !selectedImage)}
+                        disabled={loading || (mode === 'story' && media.length === 0) || (mode === 'post' && !content.trim() && media.length === 0)}
                         className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                         {loading ? 'Sharing...' : 'Share'} <Send size={16} />

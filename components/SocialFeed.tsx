@@ -5,6 +5,7 @@ import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
+import { MediaCarousel } from './MediaCarousel';
 
 const timeAgo = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -128,11 +129,33 @@ export function SocialFeed() {
                                 </div>
 
                                 {/* Post Media */}
-                                {post.mediaUrl && (
-                                    <div className="w-full aspect-square bg-black flex items-center justify-center">
-                                        <img src={post.mediaUrl} className="max-w-full max-h-full object-contain" />
+                                {(post.media && post.media.length > 0) || post.mediaUrl ? (
+                                    <div className="relative w-full aspect-square bg-black flex items-center justify-center overflow-hidden">
+                                        {post.media && post.media.length > 1 ? (
+                                            <MediaCarousel
+                                                media={post.media}
+                                                aspect="square"
+                                                showArrows
+                                                showDots
+                                            />
+                                        ) : (
+                                            <img
+                                                src={post.media && post.media.length === 1 ? post.media[0].url : (post.mediaUrl as string)}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        )}
+
+                                        {post.media && post.media.length > 1 && (
+                                            <div className="absolute top-2 right-2 flex items-center gap-0.5 text-white/90">
+                                                {/* Simple stack indicator for carousel posts */}
+                                                <div className="relative w-4 h-4">
+                                                    <div className="absolute inset-0 rounded-sm border border-white/80 bg-black/40" />
+                                                    <div className="absolute -top-0.5 -left-0.5 w-4 h-4 rounded-sm border border-white/60 bg-black/20" />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                ) : null}
 
                                 {/* Post Actions */}
                                 <div className="p-3">

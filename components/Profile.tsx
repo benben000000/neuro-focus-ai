@@ -578,7 +578,7 @@ export function Profile() {
                                     </button>
                                     <button className="flex items-center gap-1 text-slate-400">
                                         <MessageCircle size={16} />
-                                        <span className="text-xs">{activePost.commentsCount} comments</span>
+                                        <span className="text-xs">{activePost.commentsCount || 0} comments</span>
                                     </button>
                                 </div>
 

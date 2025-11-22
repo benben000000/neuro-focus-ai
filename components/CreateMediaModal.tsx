@@ -183,6 +183,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                         ...postData,
                         likes: 0,
                         likedBy: [],
+                        commentsCount: 0,
                         createdAt: now
                     });
                 }

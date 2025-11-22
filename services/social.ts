@@ -189,7 +189,7 @@ export const subscribeToUserProfile = (uid: string, callback: (profile: UserProf
 // --- STORY FUNCTIONS ---
 
 export const createStory = async (
-    story: Omit<Story, 'id' | 'createdAt' | 'expiresAt'>
+    story: Omit<Story, 'id' | 'createdAt' | 'expiresAt' | 'commentsCount'>
 ): Promise<string> => {
     try {
         const storiesRef = collection(db, 'stories');
@@ -238,7 +238,7 @@ export const subscribeToStories = (callback: (stories: Story[]) => void) => {
 // --- FEED FUNCTIONS ---
 
 export const createPost = async (
-    post: Omit<SocialPost, 'id' | 'createdAt' | 'likes'>
+    post: Omit<SocialPost, 'id' | 'createdAt' | 'likes' | 'commentsCount'>
 ): Promise<string> => {
     try {
         const postsRef = collection(db, 'posts');

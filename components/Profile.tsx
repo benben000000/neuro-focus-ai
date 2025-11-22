@@ -5,12 +5,16 @@ import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost } from 
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
+import { CreateMediaModal } from './CreateMediaModal';
+import { PostComments } from './PostComments';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle } from 'lucide-react';
 
 export function Profile() {
     const { currentUser } = useAuth();
     const { profile, loading: profileLoading, refreshProfile } = useProfile();
     const [isEditing, setIsEditing] = useState(false);
+    const [isEditingPost, setIsEditingPost] = useState(false);
+    const [viewerCommentCount, setViewerCommentCount] = useState(0);
     const [editName, setEditName] = useState('');
     const [editBio, setEditBio] = useState('');
     const [editPhotoURL, setEditPhotoURL] = useState('');
@@ -577,7 +581,7 @@ export function Profile() {
                                     </button>
                                     <button className="flex items-center gap-1 text-slate-400">
                                         <MessageCircle size={16} />
-                                        <span className="text-xs">0 comments</span>
+                                        <span className="text-xs">{viewerCommentCount} comments</span>
                                     </button>
                                 </div>
 
@@ -586,14 +590,15 @@ export function Profile() {
                                         <button
                                             type="button"
                                             className="flex-1 px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-200 hover:bg-slate-800"
-                                            disabled
+                                            onClick={() => setIsEditingPost(true)}
                                         >
-                                            Edit (coming soon)
+                                            Edit
                                         </button>
                                         <button
                                             type="button"
                                             className="flex-1 px-3 py-1.5 rounded-lg border border-rose-500 text-xs text-rose-400 hover:bg-rose-500/10"
                                             onClick={async () => {
+                                                if (!window.confirm('Delete this post?')) return;
                                                 try {
                                                     await deletePost(activePost.id);
                                                     closePostViewer();
@@ -606,10 +611,28 @@ export function Profile() {
                                         </button>
                                     </div>
                                 )}
+
+                                <div className="pt-4 border-t border-slate-800">
+                                    <PostComments 
+                                        postId={activePost.id} 
+                                        postAuthorId={activePost.authorId} 
+                                        onCommentCountChange={setViewerCommentCount}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Edit Post Modal */}
+            {activePost && isEditingPost && (
+                <CreateMediaModal 
+                    isOpen={true}
+                    onClose={() => setIsEditingPost(false)}
+                    type="post"
+                    initialData={activePost}
+                />
             )}
 
         </div>

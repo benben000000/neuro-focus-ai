@@ -3,15 +3,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
     SocialPost, 
     toggleLike, 
-    PostComment, 
-    subscribeToComments, 
-    addComment, 
-    deleteComment, 
     deletePost 
 } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Trash2, Edit2 } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
 import { CreateMediaModal } from './CreateMediaModal';
+import { PostComments } from './PostComments';
 
 const timeAgo = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -30,21 +27,12 @@ interface FeedPostProps {
 
 export function FeedPost({ post, onDelete }: FeedPostProps) {
     const { currentUser } = useAuth();
-    const [comments, setComments] = useState<PostComment[]>([]);
+    const [commentCount, setCommentCount] = useState(0);
     const [showComments, setShowComments] = useState(false);
-    const [newComment, setNewComment] = useState('');
-    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const [showActions, setShowActions] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     
     const actionsRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const unsubscribe = subscribeToComments(post.id, (newComments) => {
-            setComments(newComments);
-        });
-        return () => unsubscribe();
-    }, [post.id]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -64,35 +52,6 @@ export function FeedPost({ post, onDelete }: FeedPostProps) {
     const handleLike = async () => {
         if (!currentUser) return;
         await toggleLike(post.id, currentUser.uid);
-    };
-
-    const handleAddComment = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!currentUser || !newComment.trim()) return;
-
-        setIsSubmittingComment(true);
-        try {
-            await addComment(post.id, {
-                uid: currentUser.uid,
-                displayName: currentUser.displayName || 'User',
-                photoURL: currentUser.photoURL || undefined
-            }, newComment.trim());
-            setNewComment('');
-            setShowComments(true); // Ensure comments are shown after adding one
-        } catch (error) {
-            console.error('Failed to add comment:', error);
-        } finally {
-            setIsSubmittingComment(false);
-        }
-    };
-
-    const handleDeleteComment = async (commentId: string) => {
-        if (!window.confirm('Delete this comment?')) return;
-        try {
-            await deleteComment(post.id, commentId);
-        } catch (error) {
-            console.error('Failed to delete comment:', error);
-        }
     };
 
     const handleDeletePost = async () => {
@@ -229,73 +188,30 @@ export function FeedPost({ post, onDelete }: FeedPostProps) {
                 </div>
 
                 {/* Comments Link */}
-                {comments.length > 0 && !showComments && (
+                {commentCount > 0 && !showComments && (
                     <button 
                         onClick={() => setShowComments(true)}
                         className="text-slate-500 text-sm mb-1"
                     >
-                        View all {comments.length} comments
+                        View all {commentCount} comments
                     </button>
                 )}
 
                 {/* Comments Section */}
-                {showComments && (
-                    <div className="mt-3 space-y-3 animate-in slide-in-from-top-2 duration-200">
-                        {comments.map(comment => (
-                            <div key={comment.id} className="flex items-start gap-2 text-sm group">
-                                <span className="font-bold text-slate-900 dark:text-white shrink-0">{comment.authorName}</span>
-                                <div className="flex-1 min-w-0">
-                                    <span className="text-slate-700 dark:text-slate-300 break-words">{comment.content}</span>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-xs text-slate-400">{timeAgo(comment.createdAt)}</span>
-                                        {(currentUser?.uid === comment.authorId || isAuthor) && (
-                                            <button 
-                                                onClick={() => handleDeleteComment(comment.id)}
-                                                className="text-xs text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                Delete
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                <div className={showComments ? 'mt-3 animate-in slide-in-from-top-2 duration-200' : 'hidden'}>
+                    <PostComments 
+                        postId={post.id} 
+                        postAuthorId={post.authorId}
+                        onCommentCountChange={setCommentCount}
+                    />
+                </div>
 
                 {/* Timestamp */}
                 <div className="text-xs text-slate-400 uppercase tracking-wide mt-2">
                     {timeAgo(post.createdAt)}
                 </div>
                 
-                {/* Add Comment Input */}
-                <form onSubmit={handleAddComment} className="mt-3 flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <input 
-                        type="text"
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Add a comment..."
-                        className="flex-1 bg-transparent text-sm border-none focus:ring-0 p-0 placeholder:text-slate-400 dark:text-white"
-                    />
-                    {newComment.trim() && (
-                        <button 
-                            type="submit" 
-                            disabled={isSubmittingComment}
-                            className="text-indigo-600 font-bold text-sm hover:text-indigo-700 disabled:opacity-50"
-                        >
-                            Post
-                        </button>
-                    )}
-                </form>
             </div>
-            
-            {/* Edit Modal - Reusing CreateMediaModal logic would be ideal but it's designed for creation. 
-                For now, let's just add the modal trigger if needed, but since the requirement says "reusing composer controls", 
-                we might need to refactor CreateMediaModal or create a new EditPostModal.
-                
-                For this iteration, I'll pass `isEditing` state to the parent or handle it here.
-                Since CreateMediaModal is complex, let's just pass a simplified editing UI or modify CreateMediaModal.
-            */}
             
             {isEditing && (
                 <CreateMediaModal 
@@ -303,7 +219,6 @@ export function FeedPost({ post, onDelete }: FeedPostProps) {
                     onClose={() => setIsEditing(false)}
                     type="post"
                     initialData={post}
-                    // No need for onPostUpdated as the subscription will handle the update
                 />
             )}
         </article>

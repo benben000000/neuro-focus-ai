@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Story, subscribeToStories, getUserProfile } from '../services/social';
+import { Story, subscribeToStories } from '../services/social';
 import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface StoryTrayProps {
@@ -78,7 +78,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                     {Object.entries(groupedStories).map(([authorId, userStories]) => {
                         if (authorId === currentUser?.uid) return null; // Skip own story in list for now
                         const story = userStories[0]; // Show latest or first
-                        const avatarUrl = story.mediaUrls?.[0] || story.authorPhoto;
+                        const avatarUrl = story.mediaUrls?.[0] || story.mediaUrl || story.authorPhoto;
                         return (
                             <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
                                 <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600">

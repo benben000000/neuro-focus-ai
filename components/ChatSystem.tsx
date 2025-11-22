@@ -5,12 +5,14 @@ import {
     subscribeToChat,
     sendMessage,
     createGroupChat,
+    createOrGetDirectChat,
     getAllUsers,
+    getUserProfile,
     ChatRoom,
     ChatMessage,
     UserProfile
 } from '../services/social';
-import { Send, Plus, Users, MessageCircle, Search, MoreVertical } from 'lucide-react';
+import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
 
 export function ChatSystem() {
     const { currentUser } = useAuth();
@@ -21,11 +23,14 @@ export function ChatSystem() {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [isSending, setIsSending] = useState(false);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
     useEffect(() => {
         if (currentUser) {
             const unsubscribe = subscribeToUserChats(currentUser.uid, setChats);
             loadUsers();
+            getUserProfile(currentUser.uid).then(setUserProfile);
             return () => unsubscribe();
         }
     }, [currentUser]);
@@ -50,28 +55,83 @@ export function ChatSystem() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
+    const getChatMetadata = (chat: ChatRoom) => {
+        if (chat.type === 'group') {
+            return {
+                name: chat.name || 'Group Chat',
+                avatar: null,
+                isGroup: true
+            };
+        }
+        
+        // For direct chats, find the other participant
+        if (currentUser && chat.participantsInfo) {
+            const otherId = chat.participants.find(id => id !== currentUser.uid);
+            if (otherId && chat.participantsInfo[otherId]) {
+                const info = chat.participantsInfo[otherId];
+                return {
+                    name: info.displayName,
+                    avatar: info.photoURL,
+                    isGroup: false
+                };
+            }
+        }
+        
+        // Fallback for legacy chats or missing info
+        return {
+            name: 'Chat',
+            avatar: null,
+            isGroup: false
+        };
+    };
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!currentUser || !activeChatId || !newMessage.trim()) return;
+        if (!currentUser || !activeChatId || !newMessage.trim() || isSending) return;
 
-        const userProfile = users.find(u => u.uid === currentUser.uid) || { displayName: 'Me' }; // Fallback
-        // Actually we should get current user profile properly, but for now:
-        const senderName = currentUser.displayName || currentUser.email || 'User';
-
-        await sendMessage(activeChatId, currentUser.uid, senderName, newMessage);
-        setNewMessage('');
+        try {
+            setIsSending(true);
+            const senderName = userProfile?.displayName || currentUser.displayName || currentUser.email || 'User';
+            
+            await sendMessage(activeChatId, currentUser.uid, senderName, newMessage);
+            setNewMessage('');
+        } catch (error) {
+            console.error("Failed to send message", error);
+            alert("Failed to send message. Please try again.");
+        } finally {
+            setIsSending(false);
+        }
     };
 
     const handleCreateChat = async (participantId: string) => {
         if (!currentUser) return;
-        // Check if chat already exists (simple check)
-        // For now, just create a new group for simplicity or direct if logic allows
-        // Let's create a direct group for now
-        const chatName = "Chat";
-        const newChatId = await createGroupChat(chatName, [currentUser.uid, participantId]);
-        setActiveChatId(newChatId);
-        setShowNewChatModal(false);
+        
+        try {
+            const otherUser = users.find(u => u.uid === participantId);
+            if (!otherUser) return;
+            
+            const myProfile = userProfile || { 
+                displayName: currentUser.displayName || 'User',
+                photoURL: currentUser.photoURL || undefined
+            };
+
+            const chatId = await createOrGetDirectChat(
+                currentUser.uid,
+                { displayName: myProfile.displayName, photoURL: myProfile.photoURL },
+                participantId,
+                { displayName: otherUser.displayName, photoURL: otherUser.photoURL }
+            );
+            
+            setActiveChatId(chatId);
+            setShowNewChatModal(false);
+        } catch (error) {
+            console.error("Failed to create chat", error);
+            alert("Failed to create chat. Please try again.");
+        }
     };
+
+    const activeChat = chats.find(c => c.id === activeChatId);
+    const activeChatMetadata = activeChat ? getChatMetadata(activeChat) : { name: 'Chat', avatar: null, isGroup: false };
 
     return (
         <div className="h-[calc(100vh-8rem)] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden">
@@ -94,26 +154,33 @@ export function ChatSystem() {
                             <p>No chats yet</p>
                         </div>
                     ) : (
-                        chats.map(chat => (
-                            <button
-                                key={chat.id}
-                                onClick={() => setActiveChatId(chat.id)}
-                                className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 ${activeChatId === chat.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                                    }`}
-                            >
-                                <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold">
-                                    {chat.type === 'group' ? <Users size={20} /> : 'U'}
-                                </div>
-                                <div className="text-left flex-1 min-w-0">
-                                    <h3 className="font-bold text-slate-900 dark:text-white truncate">
-                                        {chat.name || 'Chat'}
-                                    </h3>
-                                    <p className="text-sm text-slate-500 truncate">
-                                        {chat.lastMessage || 'No messages yet'}
-                                    </p>
-                                </div>
-                            </button>
-                        ))
+                        chats.map(chat => {
+                            const metadata = getChatMetadata(chat);
+                            return (
+                                <button
+                                    key={chat.id}
+                                    onClick={() => setActiveChatId(chat.id)}
+                                    className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 ${activeChatId === chat.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                                        }`}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold overflow-hidden">
+                                        {metadata.avatar ? (
+                                            <img src={metadata.avatar} alt={metadata.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            metadata.isGroup ? <Users size={20} /> : metadata.name.charAt(0).toUpperCase()
+                                        )}
+                                    </div>
+                                    <div className="text-left flex-1 min-w-0">
+                                        <h3 className="font-bold text-slate-900 dark:text-white truncate">
+                                            {metadata.name}
+                                        </h3>
+                                        <p className="text-sm text-slate-500 truncate">
+                                            {chat.lastMessage || 'No messages yet'}
+                                        </p>
+                                    </div>
+                                </button>
+                            );
+                        })
                     )}
                 </div>
             </div>
@@ -125,11 +192,15 @@ export function ChatSystem() {
                         {/* Chat Header */}
                         <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold">
-                                    <Users size={20} />
+                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold overflow-hidden">
+                                    {activeChatMetadata.avatar ? (
+                                        <img src={activeChatMetadata.avatar} alt={activeChatMetadata.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        activeChatMetadata.isGroup ? <Users size={20} /> : activeChatMetadata.name.charAt(0).toUpperCase()
+                                    )}
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-900 dark:text-white">Current Chat</h3>
+                                    <h3 className="font-bold text-slate-900 dark:text-white">{activeChatMetadata.name}</h3>
                                     <p className="text-xs text-slate-500">Online</p>
                                 </div>
                             </div>
@@ -169,13 +240,14 @@ export function ChatSystem() {
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder="Type a message..."
                                     className="flex-1 bg-slate-100 dark:bg-slate-800 border-0 rounded-xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    disabled={isSending}
                                 />
                                 <button
                                     type="submit"
-                                    disabled={!newMessage.trim()}
-                                    className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors disabled:opacity-50"
+                                    disabled={!newMessage.trim() || isSending}
+                                    className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center"
                                 >
-                                    <Send size={20} />
+                                    {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                                 </button>
                             </div>
                         </form>
@@ -205,8 +277,12 @@ export function ChatSystem() {
                                         onClick={() => handleCreateChat(user.uid)}
                                         className="w-full p-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors text-left"
                                     >
-                                        <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold">
-                                            {user.displayName?.charAt(0).toUpperCase()}
+                                        <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold overflow-hidden">
+                                            {user.photoURL ? (
+                                                <img src={user.photoURL} alt={user.displayName} className="w-full h-full object-cover" />
+                                            ) : (
+                                                user.displayName?.charAt(0).toUpperCase()
+                                            )}
                                         </div>
                                         <div>
                                             <p className="font-bold text-slate-900 dark:text-white">{user.displayName}</p>

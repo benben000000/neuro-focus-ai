@@ -22,6 +22,33 @@ import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
 
 // --- TYPES ---
+
+export interface UserPresence {
+    uid: string;
+    online: boolean;
+    lastSeen: number;
+    activeGroupId?: string;
+    activeChannelId?: string;
+    voiceChannelId?: string;
+    focusMode?: boolean;
+}
+
+export type NotificationType = 'group_invite' | 'mention' | 'call_join' | 'focus_reminder' | 'voice_invite';
+
+export interface UserNotification {
+    id: string;
+    userId: string;
+    type: NotificationType;
+    title: string;
+    message: string;
+    data?: any; // e.g., channelId, groupId, inviterId
+    isRead: boolean;
+    createdAt: number;
+    senderId?: string;
+    senderName?: string;
+    senderPhoto?: string;
+}
+
 export interface MoodBoardLayout {
     panelOffset?: { x: number; y: number };
     postPositions: Record<string, { x: number; y: number; z?: number; featured?: boolean }>;
@@ -853,3 +880,90 @@ export const searchUsers = async (searchTerm: string) => {
     const nameSnap = await getDocs(qName);
     return nameSnap.docs.map(d => d.data() as UserProfile);
 };
+
+// --- PRESENCE FUNCTIONS ---
+
+export const updatePresence = async (userId: string, data: Partial<UserPresence>) => {
+    const presenceRef = doc(db, 'presence', userId);
+    // Use setDoc with merge to create if not exists
+    await setDoc(presenceRef, {
+        ...data,
+        uid: userId,
+        lastSeen: Date.now()
+    }, { merge: true });
+};
+
+export const subscribeToPresence = (userId: string, callback: (presence: UserPresence | null) => void) => {
+    const presenceRef = doc(db, 'presence', userId);
+    return onSnapshot(presenceRef, (snapshot) => {
+        if (snapshot.exists()) {
+            callback(snapshot.data() as UserPresence);
+        } else {
+            callback(null);
+        }
+    });
+};
+
+export const subscribeToAllPresence = (callback: (presenceMap: Record<string, UserPresence>) => void) => {
+    // For social features, we might want to know who is online generally
+    // In a real app this might be filtered by friends or limited
+    const presenceRef = collection(db, 'presence');
+    const q = query(presenceRef, where('online', '==', true));
+    
+    return onSnapshot(q, (snapshot) => {
+        const presenceMap: Record<string, UserPresence> = {};
+        snapshot.docs.forEach(doc => {
+            presenceMap[doc.id] = doc.data() as UserPresence;
+        });
+        callback(presenceMap);
+    });
+};
+
+// --- NOTIFICATION FUNCTIONS ---
+
+export const sendNotification = async (userId: string, notification: Omit<UserNotification, 'id' | 'createdAt' | 'isRead'>) => {
+    try {
+        const notificationsRef = collection(db, 'users', userId, 'notifications');
+        await addDoc(notificationsRef, {
+            ...notification,
+            isRead: false,
+            createdAt: Date.now()
+        });
+    } catch (error) {
+        console.error('Failed to send notification', error);
+    }
+};
+
+export const subscribeToNotifications = (userId: string, callback: (notifications: UserNotification[]) => void) => {
+    const notificationsRef = collection(db, 'users', userId, 'notifications');
+    const q = query(notificationsRef, orderBy('createdAt', 'desc'), limit(50));
+    
+    return onSnapshot(q, (snapshot) => {
+        const notifications = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as UserNotification));
+        callback(notifications);
+    });
+};
+
+export const markNotificationAsRead = async (userId: string, notificationId: string) => {
+    const notifRef = doc(db, 'users', userId, 'notifications', notificationId);
+    await updateDoc(notifRef, {
+        isRead: true
+    });
+};
+
+export const inviteToVoiceChannel = async (sender: UserProfile, targetUserId: string, channelId: string, channelName: string) => {
+    await sendNotification(targetUserId, {
+        userId: targetUserId,
+        type: 'voice_invite',
+        title: 'Voice Call Invite',
+        message: `${sender.displayName} invited you to join voice channel "${channelName}"`,
+        data: { channelId, inviterId: sender.uid },
+        senderId: sender.uid,
+        senderName: sender.displayName,
+        senderPhoto: sender.photoURL
+    });
+};
+

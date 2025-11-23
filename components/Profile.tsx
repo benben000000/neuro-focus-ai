@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { useActivity } from '../contexts/ActivityContext';
-import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, mergeMoodBoardLayout, MoodBoardLayout } from '../services/social';
+import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, mergeMoodBoardLayout, MoodBoardLayout, subscribeToPresence, UserPresence } from '../services/social';
 import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
@@ -175,6 +175,12 @@ export function Profile() {
     const [saveLoading, setSaveLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+
+    useEffect(() => {
+        if (!profile?.uid) return;
+        return subscribeToPresence(profile.uid, setPresence);
+    }, [profile?.uid]);
 
     const [userPosts, setUserPosts] = useState<SocialPost[]>([]);
     const [savedPosts, setSavedPosts] = useState<SocialPost[]>([]);
@@ -702,6 +708,9 @@ export function Profile() {
                                 profile?.displayName?.charAt(0).toUpperCase() || 'U'
                             )}
                         </div>
+                        {presence?.online && !isEditing && (
+                             <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-slate-900 rounded-full z-10" />
+                        )}
                         {isEditing && (
                             <label className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-full">
                                 <span className="text-xs font-bold">Change</span>

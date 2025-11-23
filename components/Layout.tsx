@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { MusicPlayer } from './MusicPlayer';
+import { NotificationCenter } from './NotificationCenter';
 
 export function Layout({
     children,
@@ -104,6 +105,7 @@ export function Layout({
                     <NavItem path="/tools" icon={LibraryBig} label="Tools" />
                     <NavItem path="/community" icon={Users} label="Community" />
                     <NavItem path="/chat" icon={MessageCircle} label="Messages" />
+                    <NotificationCenter />
                     <NavItem path="/profile" icon={User} label="Profile" />
                 </nav>
 
@@ -171,13 +173,13 @@ export function Layout({
                 {/* Mobile Header */}
                 <header className="md:hidden h-14 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-30">
                     <div className="font-bold text-xl tracking-tight italic">NeuroFocus</div>
-                    <div className="flex items-center gap-4">
-                        <button onClick={toggleTheme} className="text-slate-900 dark:text-white">
+                    <div className="flex items-center gap-2">
+                        <button onClick={toggleTheme} className="text-slate-900 dark:text-white p-2">
                             {theme === 'light' ? <Moon size={24} /> : <Sun size={24} />}
                         </button>
-                        <button onClick={() => navigate('/chat')} className="text-slate-900 dark:text-white relative">
+                        <NotificationCenter minimal />
+                        <button onClick={() => navigate('/chat')} className="text-slate-900 dark:text-white relative p-2">
                             <MessageCircle size={24} />
-                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[10px] flex items-center justify-center text-white font-bold">2</span>
                         </button>
                     </div>
                 </header>

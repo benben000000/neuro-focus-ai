@@ -1,10 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Story, subscribeToStories } from '../services/social';
+import { Story, subscribeToStories, subscribeToPresence, UserPresence } from '../services/social';
 import { Plus, X, ChevronLeft, ChevronRight, Share2, MessageCircle, BadgeCheck } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
 import { ShareModal } from './ShareModal';
 import { CommentThread } from './CommentThread';
+
+const StoryTrayPresence = ({ userId }: { userId: string }) => {
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+    useEffect(() => {
+        return subscribeToPresence(userId, setPresence);
+    }, [userId]);
+    
+    if (!presence?.online) return null;
+    return (
+        <div className="absolute bottom-1 right-1 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full z-10" />
+    );
+};
 
 interface StoryTrayProps {
     onCreateStory: () => void;
@@ -118,7 +130,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                         const story = userStories[0]; // Show latest or first
                         return (
                             <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
-                                <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600">
+                                <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600 relative">
                                     <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white dark:bg-slate-800">
                                         {story.authorPhoto ? (
                                             <img src={story.authorPhoto} className="w-full h-full object-cover" />
@@ -128,6 +140,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                                             </div>
                                         )}
                                     </div>
+                                    <StoryTrayPresence userId={authorId} />
                                 </div>
                                 <span className="text-xs font-medium text-slate-900 dark:text-white max-w-[70px] truncate">{story.authorName}</span>
                             </div>

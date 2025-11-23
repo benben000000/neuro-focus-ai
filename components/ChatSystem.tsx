@@ -10,11 +10,35 @@ import {
     getUserProfile,
     ChatRoom,
     ChatMessage,
-    UserProfile
+    UserProfile,
+    subscribeToPresence,
+    UserPresence
 } from '../services/social';
 import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
 import { useVoiceChannel } from '../hooks/useVoiceChannel';
 import { VoiceChannelPanel } from './chat/VoiceChannelPanel';
+
+const ChatPresenceIndicator = ({ userId }: { userId: string }) => {
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+    useEffect(() => {
+        return subscribeToPresence(userId, setPresence);
+    }, [userId]);
+    
+    if (!presence?.online) return null;
+    return (
+        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+    );
+};
+
+const ActiveChatPresenceText = ({ userId }: { userId: string }) => {
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+    useEffect(() => {
+        return subscribeToPresence(userId, setPresence);
+    }, [userId]);
+    
+    if (presence?.online) return <p className="text-xs text-green-500 font-medium">Online</p>;
+    return <p className="text-xs text-slate-500">Offline</p>;
+};
 
 export function ChatSystem() {
     const { currentUser } = useAuth();
@@ -135,6 +159,7 @@ export function ChatSystem() {
 
     const activeChat = chats.find(c => c.id === activeChatId);
     const activeChatMetadata = activeChat ? getChatMetadata(activeChat) : { name: 'Chat', avatar: null, isGroup: false };
+    const activeOtherUserId = !activeChatMetadata.isGroup && activeChat ? activeChat.participants.find(id => id !== currentUser?.uid) : null;
 
     return (
         <div className="h-[calc(100vh-8rem)] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden">
@@ -159,6 +184,7 @@ export function ChatSystem() {
                     ) : (
                         chats.map(chat => {
                             const metadata = getChatMetadata(chat);
+                            const otherUserId = !metadata.isGroup ? chat.participants.find(id => id !== currentUser?.uid) : null;
                             return (
                                 <button
                                     key={chat.id}
@@ -166,12 +192,13 @@ export function ChatSystem() {
                                     className={`w-full p-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800 ${activeChatId === chat.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
                                         }`}
                                 >
-                                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold overflow-hidden">
+                                    <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 font-bold overflow-hidden relative">
                                         {metadata.avatar ? (
                                             <img src={metadata.avatar} alt={metadata.name} className="w-full h-full object-cover" />
                                         ) : (
                                             metadata.isGroup ? <Users size={20} /> : metadata.name.charAt(0).toUpperCase()
                                         )}
+                                        {otherUserId && <ChatPresenceIndicator userId={otherUserId} />}
                                     </div>
                                     <div className="text-left flex-1 min-w-0">
                                         <h3 className="font-bold text-slate-900 dark:text-white truncate">
@@ -195,16 +222,21 @@ export function ChatSystem() {
                         {/* Chat Header */}
                         <div className="p-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold overflow-hidden">
+                                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold overflow-hidden relative">
                                     {activeChatMetadata.avatar ? (
                                         <img src={activeChatMetadata.avatar} alt={activeChatMetadata.name} className="w-full h-full object-cover" />
                                     ) : (
                                         activeChatMetadata.isGroup ? <Users size={20} /> : activeChatMetadata.name.charAt(0).toUpperCase()
                                     )}
+                                    {activeOtherUserId && <ChatPresenceIndicator userId={activeOtherUserId} />}
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-slate-900 dark:text-white">{activeChatMetadata.name}</h3>
-                                    <p className="text-xs text-slate-500">Online</p>
+                                    {activeOtherUserId ? (
+                                        <ActiveChatPresenceText userId={activeOtherUserId} />
+                                    ) : (
+                                        <p className="text-xs text-slate-500">Online</p>
+                                    )}
                                 </div>
                             </div>
                             <button className="text-slate-400 hover:text-slate-600">

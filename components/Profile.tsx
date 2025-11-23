@@ -6,6 +6,7 @@ import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark } from 'lucide-react';
+import { CommentThread } from './CommentThread';
 
 export function Profile() {
     const { currentUser } = useAuth();
@@ -584,7 +585,7 @@ export function Profile() {
                                 </div>
                             </div>
 
-                            <div className="p-4 flex-1 overflow-y-auto space-y-3 text-sm">
+                            <div className="p-4 space-y-3 text-sm border-b border-slate-800 max-h-[40vh] overflow-y-auto custom-scrollbar">
                                 {activePost.content && (
                                     <p className="whitespace-pre-wrap">{activePost.content}</p>
                                 )}
@@ -604,7 +605,7 @@ export function Profile() {
                                     </button>
                                     <button className="flex items-center gap-1 text-slate-400">
                                         <MessageCircle size={16} />
-                                        <span className="text-xs">0 comments</span>
+                                        <span className="text-xs">{activePost.commentsCount || 0} comments</span>
                                     </button>
                                     <button 
                                         onClick={() => currentUser && toggleSavePost(currentUser.uid, activePost.id)}
@@ -640,6 +641,15 @@ export function Profile() {
                                         </button>
                                     </div>
                                 )}
+                            </div>
+
+                            <div className="flex-1 overflow-hidden flex flex-col dark">
+                                <CommentThread
+                                    parentId={activePost.id}
+                                    parentType="posts"
+                                    isOwner={currentUser?.uid === activePost.authorId}
+                                    className="h-full bg-transparent border-0"
+                                />
                             </div>
                         </div>
                     </div>

@@ -8,6 +8,7 @@ import { CreateMediaModal } from './CreateMediaModal';
 import { MediaCarousel } from './MediaCarousel';
 import { ShareModal } from './ShareModal';
 import { SharedContentPanel } from './SharedContentPanel';
+import { CommentThread } from './CommentThread';
 
 const timeAgo = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -28,6 +29,7 @@ export function SocialFeed() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [createMode, setCreateMode] = useState<'post' | 'story'>('post');
     const [shareModalContent, setShareModalContent] = useState<{ type: 'post' | 'story', id: string } | null>(null);
+    const [activeCommentThreadId, setActiveCommentThreadId] = useState<string | null>(null);
 
     // Sidebar states
     const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
@@ -170,8 +172,12 @@ export function SocialFeed() {
                                             >
                                                 <Heart size={24} fill={post.likedBy?.includes(currentUser?.uid || '') ? "currentColor" : "none"} />
                                             </button>
-                                            <button className="text-slate-900 dark:text-white hover:text-slate-600">
+                                            <button 
+                                                onClick={() => setActiveCommentThreadId(activeCommentThreadId === post.id ? null : post.id)}
+                                                className="text-slate-900 dark:text-white hover:text-slate-600 flex items-center gap-1"
+                                            >
                                                 <MessageCircle size={24} />
+                                                {post.commentsCount > 0 && <span className="text-sm font-medium">{post.commentsCount}</span>}
                                             </button>
                                             <button 
                                                 onClick={() => setShareModalContent({ type: 'post', id: post.id })}
@@ -200,7 +206,21 @@ export function SocialFeed() {
                                     </div>
 
                                     {/* Comments Link */}
-                                    <button className="text-slate-500 text-sm mb-1">View all comments</button>
+                                    <button 
+                                        onClick={() => setActiveCommentThreadId(activeCommentThreadId === post.id ? null : post.id)}
+                                        className="text-slate-500 text-sm mb-1 hover:text-slate-700 dark:hover:text-slate-300"
+                                    >
+                                        {activeCommentThreadId === post.id ? 'Hide comments' : post.commentsCount > 0 ? `View all ${post.commentsCount} comments` : 'Add a comment'}
+                                    </button>
+
+                                    {activeCommentThreadId === post.id && (
+                                        <CommentThread
+                                            parentId={post.id}
+                                            parentType="posts"
+                                            isOwner={currentUser?.uid === post.authorId}
+                                            className="mt-2 rounded-lg"
+                                        />
+                                    )}
 
                                     {/* Timestamp */}
                                     <div className="text-xs text-slate-400 uppercase tracking-wide">

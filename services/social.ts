@@ -14,7 +14,8 @@ import {
     updateDoc,
     arrayUnion,
     arrayRemove,
-    deleteDoc
+    deleteDoc,
+    increment
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -70,7 +71,17 @@ export interface SocialPost {
     };
     likes: number;
     likedBy?: string[]; // Track who liked
+    commentsCount: number;
     createdAt: number; // timestamp
+}
+
+export interface SocialComment {
+    id: string;
+    authorId: string;
+    authorName: string;
+    authorPhoto?: string;
+    content: string;
+    createdAt: number;
 }
 
 export interface ChatMessage {
@@ -93,6 +104,7 @@ export interface Story {
     createdAt: number;
     expiresAt: number;
     viewedBy?: string[];
+    commentsCount: number;
 }
 
 export interface ChatRoom {
@@ -195,6 +207,7 @@ export const createStory = async (
         const now = Date.now();
         const docRef = await addDoc(storiesRef, {
             ...story,
+            commentsCount: 0,
             createdAt: now,
             expiresAt: now + (24 * 60 * 60 * 1000) // 24 hours
         });
@@ -244,6 +257,7 @@ export const createPost = async (
             ...post,
             likes: 0,
             likedBy: [],
+            commentsCount: 0,
             createdAt: Date.now()
         });
         return docRef.id;
@@ -284,6 +298,68 @@ export const toggleLike = async (postId: string, userId: string) => {
             });
         }
     }
+};
+
+export const addComment = async (
+    parentId: string,
+    collectionName: 'posts' | 'stories',
+    text: string,
+    user: { uid: string, displayName: string, photoURL?: string }
+) => {
+    try {
+        const commentsRef = collection(db, collectionName, parentId, 'comments');
+        await addDoc(commentsRef, {
+            authorId: user.uid,
+            authorName: user.displayName,
+            authorPhoto: user.photoURL || '',
+            content: text,
+            createdAt: Date.now()
+        });
+
+        const parentRef = doc(db, collectionName, parentId);
+        await updateDoc(parentRef, {
+            commentsCount: increment(1)
+        });
+    } catch (error: any) {
+        console.error('addComment failed', error);
+        throw new Error(error?.message || 'Failed to add comment.');
+    }
+};
+
+export const deleteComment = async (
+    parentId: string,
+    collectionName: 'posts' | 'stories',
+    commentId: string
+) => {
+    try {
+        const commentRef = doc(db, collectionName, parentId, 'comments', commentId);
+        await deleteDoc(commentRef);
+
+        const parentRef = doc(db, collectionName, parentId);
+        await updateDoc(parentRef, {
+            commentsCount: increment(-1)
+        });
+    } catch (error: any) {
+        console.error('deleteComment failed', error);
+        throw new Error(error?.message || 'Failed to delete comment.');
+    }
+};
+
+export const subscribeToComments = (
+    parentId: string,
+    collectionName: 'posts' | 'stories',
+    callback: (comments: SocialComment[]) => void
+) => {
+    const commentsRef = collection(db, collectionName, parentId, 'comments');
+    const q = query(commentsRef, orderBy('createdAt', 'asc'));
+
+    return onSnapshot(q, (snapshot) => {
+        const comments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as SocialComment));
+        callback(comments);
+    });
 };
 
 export const subscribeToFeed = (callback: (posts: SocialPost[]) => void) => {

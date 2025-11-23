@@ -32,7 +32,7 @@ const UserPresenceIndicator = ({ userId }: { userId: string }) => {
     );
 };
 
-const UserSuggestionRow = ({ user, currentUserProfile }: { user: UserProfile, currentUserProfile: UserProfile | null }) => {
+const UserSuggestionRow: React.FC<{ user: UserProfile, currentUserProfile: UserProfile | null }> = ({ user, currentUserProfile }) => {
     const [isLoading, setIsLoading] = useState(false);
     const isFollowing = currentUserProfile?.following?.includes(user.uid);
 

@@ -42,7 +42,15 @@ This project is ready to be deployed to Netlify.
         -   `VITE_LIVEKIT_URL`
         -   `VITE_LIVEKIT_TOKEN_ENDPOINT`
 
-5.  **Deploy**:
+5.  **Firestore Configuration**:
+    
+    **Required Indexes**:
+    You will need to create the following composite indexes in the Firebase Console:
+    -   **Collection**: `posts`
+        -   **Fields**: `authorId` (Ascending) + `createdAt` (Descending)
+        -   **Query Scope**: Collection
+
+6.  **Deploy**:
     -   Click "Deploy Site".
 
 ## LiveKit Setup

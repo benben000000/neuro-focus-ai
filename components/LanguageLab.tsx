@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Mic, BookOpen, MessageSquare, PenTool, Globe, Trophy, Flame, Target } from 'lucide-react';
 
 interface LanguageLabProps {
-  onStartVoice: () => void;
+  onStartVoice?: () => void;
+  onClose?: () => void;
 }
 
-export function LanguageLab({ onStartVoice }: LanguageLabProps) {
+export function LanguageLab({ onStartVoice, onClose }: LanguageLabProps) {
   const [activeTab, setActiveTab] = useState<'daily' | 'coach' | 'writing'>('daily');
   const [selectedLanguage, setSelectedLanguage] = useState('Spanish');
 

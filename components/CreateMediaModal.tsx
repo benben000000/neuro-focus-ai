@@ -101,7 +101,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
     };
 
     const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+        const files = Array.from(e.target.files || []) as File[];
         if (!files.length) return;
 
         const errors: string[] = [];
@@ -196,6 +196,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                         ...postData,
                         likes: 0,
                         likedBy: [],
+                        commentsCount: 0,
                         createdAt: now
                     });
                 }

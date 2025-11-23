@@ -120,6 +120,9 @@ export type ToolMode =
   | 'EQUATION'
   | 'MEMORIZATION'
   | 'IDENTIFICATION'
-  | 'PEER_TEACHING';
+  | 'PEER_TEACHING'
+  | 'VIDEO_EXPLAINER'
+  | 'LANGUAGE_LAB'
+  | 'MAJOR_EXAM';
 
 export type DeepDiveType = 'SOCRATIC' | 'ELABORATION' | 'SUMMARIZATION' | 'PEER_TEACHING';

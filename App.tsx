@@ -16,6 +16,7 @@ import { FileAttachment } from './types';
 import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
+import { LanguageLab } from './components/LanguageLab';
 import { useSecurity } from './hooks/useSecurity';
 
 // Private Route Wrapper
@@ -109,6 +110,7 @@ function AppContent() {
               onStartVoice={() => setIsVoiceMode(true)}
             />
           } />
+          <Route path="language" element={<LanguageLab />} />
           <Route path="profile" element={<Profile />} />
           <Route path="community" element={<SocialFeed />} />
           <Route path="chat" element={<ChatSystem />} />

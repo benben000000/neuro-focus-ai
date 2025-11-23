@@ -123,3 +123,12 @@ export type ToolMode =
   | 'PEER_TEACHING';
 
 export type DeepDiveType = 'SOCRATIC' | 'ELABORATION' | 'SUMMARIZATION' | 'PEER_TEACHING';
+
+export interface DailyPhrase {
+  id: string;
+  targetPhrase: string;
+  translation: string;
+  usageTip: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  practiced: boolean;
+}

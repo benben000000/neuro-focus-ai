@@ -104,6 +104,7 @@ export function Layout({
                     <NavItem path="/tutor" icon={GraduationCap} label="AI Tutor" />
                     <NavItem path="/language" icon={Globe} label="Language" />
                     <NavItem path="/tools" icon={LibraryBig} label="Tools" />
+                    <NavItem path="/language" icon={Languages} label="Language Lab" />
                     <NavItem path="/community" icon={Users} label="Community" />
                     <NavItem path="/chat" icon={MessageCircle} label="Messages" />
                     <NavItem path="/profile" icon={User} label="Profile" />

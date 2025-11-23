@@ -35,6 +35,35 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
         return () => unsubscribe();
     }, []);
 
+    useEffect(() => {
+        if (!viewingStory) return;
+
+        const preventDefault = (e: any) => {
+            e.preventDefault();
+        };
+
+        // Block pinch-zoom gestures on iOS/Safari
+        document.addEventListener('gesturestart', preventDefault);
+        document.addEventListener('gesturechange', preventDefault);
+        document.addEventListener('gestureend', preventDefault);
+
+        // Block Ctrl+Wheel zoom
+        const handleWheel = (e: WheelEvent) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+            }
+        };
+        // Passive: false is required to be able to call preventDefault
+        document.addEventListener('wheel', handleWheel, { passive: false });
+
+        return () => {
+            document.removeEventListener('gesturestart', preventDefault);
+            document.removeEventListener('gesturechange', preventDefault);
+            document.removeEventListener('gestureend', preventDefault);
+            document.removeEventListener('wheel', handleWheel);
+        };
+    }, [viewingStory]);
+
     const handleViewStory = (authorId: string) => {
         setViewingStory(authorId);
         setCurrentStoryIndex(0);
@@ -117,7 +146,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                         <X size={32} />
                     </button>
 
-                    <div className="relative w-full max-w-md h-full md:h-[80vh] bg-slate-900 md:rounded-2xl overflow-hidden flex flex-col">
+                    <div className="relative w-full max-w-md h-full md:h-[80vh] bg-slate-900 md:rounded-2xl overflow-hidden flex flex-col touch-pan-y">
                         {/* Progress Bar */}
                         <div className="absolute top-0 left-0 w-full p-2 flex gap-1 z-20">
                             {groupedStories[viewingStory].map((_, idx) => (
@@ -175,6 +204,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                                     aspect="story"
                                     showArrows
                                     showDots
+                                    className="touch-pan-y"
                                 />
                             ) : (
                                 <img src={activeStory.mediaUrl} className="max-w-full max-h-full object-contain" />

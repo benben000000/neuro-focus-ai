@@ -5,6 +5,7 @@ import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchS
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar } from 'lucide-react';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Move, Star } from 'lucide-react';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles } from 'lucide-react';
 import { CommentThread } from './CommentThread';
@@ -129,6 +130,36 @@ const DraggablePostCard = ({
                         <Star size={14} fill={config.isFeatured ? "currentColor" : "none"} />
                     </button>
                 )}
+            </div>
+        </div>
+    );
+};
+
+const LevelSummary = ({ level, xp }: { level: number; xp: number }) => {
+    // Assume 500 XP per level as per heuristic
+    const xpPerLevel = 500;
+    const currentLevelStartXp = (level - 1) * xpPerLevel;
+    const progressInLevel = Math.max(0, xp - currentLevelStartXp);
+    // Cap at 100%
+    const progressPercent = Math.min(100, (progressInLevel / xpPerLevel) * 100);
+    
+    return (
+        <div className="mt-3 inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 rounded-full px-1.5 py-1.5 pr-4 border border-slate-200 dark:border-slate-700/60">
+             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                {level}
+            </div>
+            <div className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
+                    <span>Level {level}</span>
+                    <span className="text-slate-400">•</span>
+                    <span className="text-slate-500 dark:text-slate-400">{Math.floor(progressPercent)}% to next</span>
+                </div>
+                <div className="w-24 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
+                        style={{ width: `${progressPercent}%` }}
+                    />
+                </div>
             </div>
         </div>
     );
@@ -735,6 +766,7 @@ export function Profile() {
                                 <p className="text-slate-500 dark:text-slate-400 max-w-xl">{profile?.bio || "No bio yet."}</p>
                             </div>
                         )}
+                        <LevelSummary level={profile?.level || 1} xp={profile?.xp || 0} />
                     </div>
 
                     <button
@@ -865,15 +897,16 @@ export function Profile() {
                 </div>
             )}
 
-            {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center gap-4">
-                    <div className="p-3 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl">
-                        <Award size={24} />
+                    <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl">
+                        <Calendar size={24} />
                     </div>
                     <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Level {profile?.level || 1}</p>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{profile?.xp || 0} XP</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Joined</p>
+                        <p className="text-lg font-bold text-slate-900 dark:text-white">
+                            {profile?.joinedAt ? new Date(profile.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Unknown'}
+                        </p>
                     </div>
                 </div>
 

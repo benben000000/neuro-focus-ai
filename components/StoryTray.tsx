@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Story, subscribeToStories } from '../services/social';
-import { Plus, X, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Share2, MessageCircle } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
 import { ShareModal } from './ShareModal';
+import { CommentThread } from './CommentThread';
 
 interface StoryTrayProps {
     onCreateStory: () => void;
@@ -16,6 +17,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
     const [viewingStory, setViewingStory] = useState<string | null>(null); // Author ID
     const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
     const [shareModalContent, setShareModalContent] = useState<{ type: 'post' | 'story', id: string } | null>(null);
+    const [isCommentsOpen, setIsCommentsOpen] = useState(false);
 
     useEffect(() => {
         const unsubscribe = subscribeToStories((fetchedStories) => {
@@ -36,6 +38,7 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
     const handleViewStory = (authorId: string) => {
         setViewingStory(authorId);
         setCurrentStoryIndex(0);
+        setIsCommentsOpen(false);
     };
 
     const handleNextStory = () => {
@@ -43,14 +46,17 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
         const userStories = groupedStories[viewingStory];
         if (currentStoryIndex < userStories.length - 1) {
             setCurrentStoryIndex(prev => prev + 1);
+            setIsCommentsOpen(false);
         } else {
             setViewingStory(null);
+            setIsCommentsOpen(false);
         }
     };
 
     const handlePrevStory = () => {
         if (currentStoryIndex > 0) {
             setCurrentStoryIndex(prev => prev - 1);
+            setIsCommentsOpen(false);
         }
     };
 
@@ -135,15 +141,27 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                                 </div>
                                 <span className="font-bold text-white shadow-sm">{activeStory.authorName}</span>
                             </div>
-                            <button 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShareModalContent({ type: 'story', id: activeStory.id });
-                                }}
-                                className="text-white/80 hover:text-white p-2 bg-black/20 rounded-full backdrop-blur-sm"
-                            >
-                                <Share2 size={20} />
-                            </button>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsCommentsOpen(!isCommentsOpen);
+                                    }}
+                                    className="text-white/80 hover:text-white p-2 bg-black/20 rounded-full backdrop-blur-sm flex items-center gap-1"
+                                >
+                                    <MessageCircle size={20} />
+                                    {activeStory.commentsCount > 0 && <span className="text-xs font-bold">{activeStory.commentsCount}</span>}
+                                </button>
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShareModalContent({ type: 'story', id: activeStory.id });
+                                    }}
+                                    className="text-white/80 hover:text-white p-2 bg-black/20 rounded-full backdrop-blur-sm"
+                                >
+                                    <Share2 size={20} />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Main Content */}
@@ -160,20 +178,36 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                             )}
 
                             {/* Story-to-story navigation */}
-                            <button
-                                type="button"
-                                onClick={handlePrevStory}
-                                className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center"
-                            >
-                                <ChevronLeft size={18} />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleNextStory}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center"
-                            >
-                                <ChevronRight size={18} />
-                            </button>
+                            {!isCommentsOpen && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={handlePrevStory}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center z-10"
+                                    >
+                                        <ChevronLeft size={18} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleNextStory}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center z-10"
+                                    >
+                                        <ChevronRight size={18} />
+                                    </button>
+                                </>
+                            )}
+
+                            {isCommentsOpen && (
+                                <div className="absolute inset-x-0 bottom-0 top-16 z-30 bg-black/80 backdrop-blur-md rounded-t-2xl overflow-hidden dark" onClick={(e) => e.stopPropagation()}>
+                                    <CommentThread
+                                        parentId={activeStory.id}
+                                        parentType="stories"
+                                        isOwner={currentUser?.uid === activeStory.authorId}
+                                        onClose={() => setIsCommentsOpen(false)}
+                                        className="h-full bg-transparent border-0"
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

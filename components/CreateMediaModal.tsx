@@ -32,6 +32,18 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
         }
     }, [isOpen, initialType]);
 
+    // Lock body scroll when modal is open
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const MAX_DIMENSION = 1600;
@@ -203,7 +215,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
 
     return (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[min(90vh,720px)]">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <h2 className="font-bold text-lg text-slate-900 dark:text-white">Create New</h2>
@@ -229,7 +241,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 </div>
 
                 {/* Content Area */}
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-4 flex-1 overflow-y-auto overscroll-contain">
                     {/* Error Alert */}
                     {(error || validationErrors.length > 0) && (
                         <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-start gap-2">
@@ -251,13 +263,15 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                     <div className="space-y-3">
                         <div
                             onClick={() => fileInputRef.current?.click()}
-                            className={`w-full ${mode === 'story' ? 'aspect-[9/16]' : 'aspect-square'} rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden relative ${media.length > 0 ? 'border-none bg-black' : ''}`}
+                            className={`w-full rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden relative ${media.length > 0 ? (mode === 'story' ? 'h-[70vh]' : 'h-[50vh]') : (mode === 'story' ? 'aspect-[9/16]' : 'aspect-square')} ${media.length > 0 ? 'border-none bg-black' : ''}`}
                         >
                             {media.length > 0 ? (
                                 <>
                                     <MediaCarousel
                                         media={media}
-                                        aspect={mode === 'story' ? 'story' : 'square'}
+                                        aspect="auto"
+                                        objectFit="contain"
+                                        className="h-full"
                                         showArrows
                                         showDots
                                         initialIndex={activeIndex}

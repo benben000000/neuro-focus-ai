@@ -10,6 +10,7 @@ interface MediaCarouselProps {
     className?: string;
     initialIndex?: number;
     onIndexChange?: (index: number) => void;
+    objectFit?: 'cover' | 'contain';
 }
 
 export function MediaCarousel({
@@ -19,7 +20,8 @@ export function MediaCarousel({
     showDots = true,
     className = '',
     initialIndex = 0,
-    onIndexChange
+    onIndexChange,
+    objectFit = 'cover'
 }: MediaCarouselProps) {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const touchStartXRef = useRef<number | null>(null);
@@ -89,7 +91,7 @@ export function MediaCarousel({
             <img
                 src={active.url}
                 alt="Post media"
-                className="w-full h-full object-cover select-none"
+                className={`w-full h-full select-none ${objectFit === 'contain' ? 'object-contain' : 'object-cover'}`}
             />
 
             {/* Index indicator */}

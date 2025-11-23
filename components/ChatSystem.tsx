@@ -46,6 +46,43 @@ export function ChatSystem() {
     const [members, setMembers] = useState<(GroupMember & Partial<UserProfile>)[]>([]);
     const [messages, setMessages] = useState<GroupMessage[] | any[]>([]);
     const [dmChats, setDmChats] = useState<ChatRoom[]>([]);
+import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
+import { useVoiceChannel } from '../hooks/useVoiceChannel';
+import { VoiceChannelPanel } from './chat/VoiceChannelPanel';
+
+const ChatPresenceIndicator = ({ userId }: { userId: string }) => {
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+    useEffect(() => {
+        return subscribeToPresence(userId, setPresence);
+    }, [userId]);
+    
+    if (!presence?.online) return null;
+    return (
+        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+    );
+};
+
+const ActiveChatPresenceText = ({ userId }: { userId: string }) => {
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+    useEffect(() => {
+        return subscribeToPresence(userId, setPresence);
+    }, [userId]);
+    
+    if (presence?.online) return <p className="text-xs text-green-500 font-medium">Online</p>;
+    return <p className="text-xs text-slate-500">Offline</p>;
+};
+
+export function ChatSystem() {
+    const { currentUser } = useAuth();
+    const voice = useVoiceChannel();
+    const [chats, setChats] = useState<ChatRoom[]>([]);
+    const [activeChatId, setActiveChatId] = useState<string | null>(null);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [isSending, setIsSending] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [users, setUsers] = useState<UserProfile[]>([]);
 
@@ -283,6 +320,30 @@ export function ChatSystem() {
                 onSendMessage={handleSendMessage}
                 currentUser={userProfile}
             />
+                        {/* Voice Channel Panel */}
+                        <VoiceChannelPanel channelId={activeChatId} voice={voice} />
+
+                        {/* Messages */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                            {messages.map(msg => {
+                                const isMe = msg.senderId === currentUser?.uid;
+                                return (
+                                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                        <div className={`max-w-[70%] rounded-2xl p-4 ${isMe
+                                                ? 'bg-indigo-600 text-white rounded-br-none'
+                                                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none shadow-sm'
+                                            }`}>
+                                            {!isMe && <p className="text-xs font-bold mb-1 opacity-70">{msg.senderName}</p>}
+                                            <p>{msg.content}</p>
+                                            <p className={`text-[10px] mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            <div ref={messagesEndRef} />
+                        </div>
 
             {/* Member Sidebar (Only for groups) */}
             {activeGroupId && (

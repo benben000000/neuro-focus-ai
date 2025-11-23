@@ -6,18 +6,10 @@ import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchS
 import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move } from 'lucide-react';
 import { CommentThread } from './CommentThread';
 
-const DraggablePostCard = ({
-    post,
-    config,
-    isOwner,
-    onUpdate,
-    onInteract,
-    maxZ,
-    onBringToFront
-}: {
+interface DraggablePostCardProps {
     post: SocialPost;
     config: {
         postId: string;
@@ -29,11 +21,29 @@ const DraggablePostCard = ({
         isFeatured?: boolean;
     };
     isOwner: boolean;
-    onUpdate: (id: string, updates: Partial<typeof config>) => void;
+    onUpdate: (id: string, updates: Partial<{
+        postId: string;
+        x: number;
+        y: number;
+        rotation: number;
+        scale: number;
+        zIndex: number;
+        isFeatured?: boolean;
+    }>) => void;
     onInteract: () => void;
     maxZ: number;
     onBringToFront: () => void;
-}) => {
+}
+
+const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
+    post,
+    config,
+    isOwner,
+    onUpdate,
+    onInteract,
+    maxZ,
+    onBringToFront
+}: DraggablePostCardProps) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [currentPos, setCurrentPos] = useState({ x: config.x, y: config.y });

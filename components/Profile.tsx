@@ -5,8 +5,7 @@ import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchS
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Move, Star } from 'lucide-react';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Move } from 'lucide-react';
 import { CommentThread } from './CommentThread';
 
 const DraggablePostCard = ({
@@ -148,7 +147,6 @@ export function Profile() {
     const [userPosts, setUserPosts] = useState<SocialPost[]>([]);
     const [savedPosts, setSavedPosts] = useState<SocialPost[]>([]);
     const [loadingSaved, setLoadingSaved] = useState(false);
-    const [layoutMode, setLayoutMode] = useState<'grid' | 'masonry' | 'board'>('grid');
     const [boardLayout, setBoardLayout] = useState<MoodBoardLayout>({ postPositions: {}, updatedAt: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const dragRef = useRef<{ id: string; startX: number; startY: number; initialLeft: number; initialTop: number; element: HTMLElement } | null>(null);
@@ -471,7 +469,7 @@ export function Profile() {
     }, [isDragging]);
 
     const handleDragStart = (e: React.MouseEvent, postId: string) => {
-        if (layoutMode !== 'board') return;
+        if (layoutMode !== 'moodboard') return;
         if ((e.target as HTMLElement).closest('button')) return;
         
         e.preventDefault();

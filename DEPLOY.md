@@ -47,3 +47,6 @@ This project is ready to be deployed to Netlify.
 -   **Secret Scanning Errors**: The `netlify.toml` file now includes `SECRETS_SCAN_ENABLED = "false"` to prevent build failures. Since this is a client-side AI app, API keys must be exposed to the browser.
 -   **Page Not Found on Refresh**: Ensure `netlify.toml` exists with the redirect rule.
 -   **API Errors**: Double-check that your Environment Variables in Netlify match your `.env` file exactly.
+
+## Documentation
+-   [RTC Research Brief](./docs/rtc-research.md) - Summary of RTC/chat product insights and engineering recommendations.

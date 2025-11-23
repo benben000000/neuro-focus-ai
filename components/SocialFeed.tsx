@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser } from '../services/social';
+import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser, subscribeToPresence, UserPresence } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, BadgeCheck } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
@@ -18,6 +18,18 @@ const timeAgo = (timestamp: number) => {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h`;
     return `${Math.floor(hours / 24)}d`;
+};
+
+const UserPresenceIndicator = ({ userId }: { userId: string }) => {
+    const [presence, setPresence] = useState<UserPresence | null>(null);
+    useEffect(() => {
+        return subscribeToPresence(userId, setPresence);
+    }, [userId]);
+    
+    if (!presence?.online) return null;
+    return (
+        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+    );
 };
 
 const UserSuggestionRow = ({ user, currentUserProfile }: { user: UserProfile, currentUserProfile: UserProfile | null }) => {
@@ -43,8 +55,11 @@ const UserSuggestionRow = ({ user, currentUserProfile }: { user: UserProfile, cu
     return (
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                    {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+                <div className="relative w-8 h-8">
+                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                        {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+                    </div>
+                    <UserPresenceIndicator userId={user.uid} />
                 </div>
                 <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1">

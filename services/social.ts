@@ -634,7 +634,18 @@ export const getAllUsers = async () => {
     return snapshot.docs.map(doc => doc.data() as UserProfile);
 };
 
-// Previous searchUsers implementation removed in favor of the one at the end of the file
+// searchUsers removed to fix duplicate export error. Using the implementation at the bottom of the file.
+// export const searchUsers = async (queryText: string) => {
+//     const usersRef = collection(db, 'users');
+//     // Simple client-side filter for now as Firestore search is limited without Algolia
+//     const snapshot = await getDocs(usersRef);
+//     const allUsers = snapshot.docs.map(doc => doc.data() as UserProfile);
+//
+//     return allUsers.filter(user =>
+//         user.displayName.toLowerCase().includes(queryText.toLowerCase()) ||
+//         user.email.toLowerCase().includes(queryText.toLowerCase())
+//     );
+// };
 
 export const sendFriendRequest = async (fromUid: string, toUid: string) => {
     const toUserRef = doc(db, 'users', toUid);

@@ -22,6 +22,12 @@ import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
 
 // --- TYPES ---
+export interface MoodBoardLayout {
+    panelOffset?: { x: number; y: number };
+    postPositions: Record<string, { x: number; y: number; z?: number; featured?: boolean }>;
+    updatedAt: number;
+}
+
 export interface UserProfile {
     uid: string;
     displayName: string;
@@ -44,6 +50,7 @@ export interface UserProfile {
     verifiedAt?: string;
     savedPostIds?: string[];
     hasCompletedOnboarding?: boolean;
+    moodBoardLayout?: MoodBoardLayout;
 }
 
 // Rich media descriptor used by the unified composer for posts & stories
@@ -211,6 +218,40 @@ export const subscribeToUserProfile = (uid: string, callback: (profile: UserProf
     });
     
     return unsubscribe;
+};
+
+export const saveMoodBoardLayout = async (userId: string, layout: MoodBoardLayout) => {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, {
+        moodBoardLayout: layout
+    });
+};
+
+export const mergeMoodBoardLayout = async (userId: string, updates: Partial<MoodBoardLayout>) => {
+    const userRef = doc(db, 'users', userId);
+    await runTransaction(db, async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists()) return;
+        
+        const currentProfile = userSnap.data() as UserProfile;
+        const currentLayout = currentProfile.moodBoardLayout || { postPositions: {}, updatedAt: 0 };
+        
+        const newLayout: MoodBoardLayout = {
+            ...currentLayout,
+            ...updates,
+            panelOffset: {
+                ...(currentLayout.panelOffset || { x: 0, y: 0 }),
+                ...(updates.panelOffset || {})
+            },
+            postPositions: {
+                ...(currentLayout.postPositions || {}),
+                ...(updates.postPositions || {})
+            },
+            updatedAt: Date.now()
+        };
+        
+        transaction.update(userRef, { moodBoardLayout: newLayout });
+    });
 };
 
 // --- STORY FUNCTIONS ---

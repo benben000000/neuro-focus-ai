@@ -201,6 +201,7 @@ export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachm
               });
               if (parts.length > 0) {
                 parts.push({ text: "I have uploaded these images. Analyze them." });
+                // @ts-ignore
                 sessionPromise.then(session => session.sendRealtimeInput({ content: parts }));
               }
             }

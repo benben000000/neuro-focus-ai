@@ -13,7 +13,7 @@ interface MediaCarouselProps {
     objectFit?: 'cover' | 'contain';
 }
 
-export function MediaCarousel({
+export const MediaCarousel: React.FC<MediaCarouselProps> = ({
     media,
     aspect = 'square',
     showArrows = true,
@@ -22,7 +22,7 @@ export function MediaCarousel({
     initialIndex = 0,
     onIndexChange,
     objectFit = 'cover'
-}: MediaCarouselProps) {
+}) => {
     const [currentIndex, setCurrentIndex] = useState(initialIndex);
     const touchStartXRef = useRef<number | null>(null);
 

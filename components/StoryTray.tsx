@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Story, subscribeToStories } from '../services/social';
-import { Plus, X, ChevronLeft, ChevronRight, Share2, MessageCircle } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Share2, MessageCircle, BadgeCheck } from 'lucide-react';
 import { MediaCarousel } from './MediaCarousel';
 import { ShareModal } from './ShareModal';
 import { CommentThread } from './CommentThread';
@@ -139,7 +139,10 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
                                         <div className="w-full h-full bg-slate-700" />
                                     )}
                                 </div>
-                                <span className="font-bold text-white shadow-sm">{activeStory.authorName}</span>
+                                <span className="font-bold text-white shadow-sm flex items-center gap-1">
+                                    {activeStory.authorName}
+                                    {activeStory.authorIsVerified && <BadgeCheck size={14} className="text-blue-400 fill-blue-900" />}
+                                </span>
                             </div>
                             <div className="flex gap-2">
                                 <button 

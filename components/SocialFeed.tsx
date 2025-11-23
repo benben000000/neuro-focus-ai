@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved } from '../services/social';
-import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare } from 'lucide-react';
+import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser } from '../services/social';
+import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, BadgeCheck } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
 import { MediaCarousel } from './MediaCarousel';
@@ -18,6 +18,51 @@ const timeAgo = (timestamp: number) => {
     const hours = Math.floor(minutes / 60);
     if (hours < 24) return `${hours}h`;
     return `${Math.floor(hours / 24)}d`;
+};
+
+const UserSuggestionRow = ({ user, currentUserProfile }: { user: UserProfile, currentUserProfile: UserProfile | null }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const isFollowing = currentUserProfile?.following?.includes(user.uid);
+
+    const handleFollowClick = async () => {
+        if (!currentUserProfile) return;
+        setIsLoading(true);
+        try {
+            if (isFollowing) {
+                await unfollowUser(currentUserProfile.uid, user.uid);
+            } else {
+                await followUser(currentUserProfile.uid, user.uid);
+            }
+        } catch (error) {
+            console.error("Failed to toggle follow", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+                </div>
+                <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                        {user.displayName}
+                        {user.isVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                    </p>
+                    <p className="text-xs text-slate-500">New to NeuroFocus</p>
+                </div>
+            </div>
+            <button 
+                onClick={handleFollowClick}
+                disabled={isLoading}
+                className={`text-xs font-bold ${isFollowing ? 'text-slate-500' : 'text-indigo-600 hover:text-indigo-800'} disabled:opacity-50`}
+            >
+                {isLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+            </button>
+        </div>
+    );
 };
 
 export function SocialFeed() {
@@ -124,7 +169,10 @@ export function SocialFeed() {
                                             </div>
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer">{post.authorName}</h3>
+                                            <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer flex items-center gap-1">
+                                                {post.authorName}
+                                                {post.authorIsVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                                            </h3>
                                             {post.location && <p className="text-xs text-slate-500">{post.location}</p>}
                                         </div>
                                     </div>
@@ -271,18 +319,7 @@ export function SocialFeed() {
                     </div>
                     <div className="space-y-3">
                         {suggestions.map(user => (
-                            <div key={user.uid} className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                                        {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{user.displayName}</p>
-                                        <p className="text-xs text-slate-500">New to NeuroFocus</p>
-                                    </div>
-                                </div>
-                                <button className="text-xs font-bold text-indigo-600 hover:text-indigo-800">Follow</button>
-                            </div>
+                            <UserSuggestionRow key={user.uid} user={user} currentUserProfile={profile} />
                         ))}
                     </div>
                 </div>

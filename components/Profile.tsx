@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
-import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved } from '../services/social';
+import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile } from '../services/social';
 import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield } from 'lucide-react';
 import { CommentThread } from './CommentThread';
 
 export function Profile() {
@@ -27,6 +27,11 @@ export function Profile() {
     const [selectedPostIndex, setSelectedPostIndex] = useState<number | null>(null);
     const [progressSummary, setProgressSummary] = useState<UserProgress | null>(null);
     const [viewerTouchStartX, setViewerTouchStartX] = useState<number | null>(null);
+
+    // Admin State
+    const [adminSearchTerm, setAdminSearchTerm] = useState('');
+    const [adminSearchResults, setAdminSearchResults] = useState<UserProfile[]>([]);
+    const [adminLoading, setAdminLoading] = useState(false);
 
     const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,6 +220,36 @@ export function Profile() {
         setViewerTouchStartX(null);
     };
 
+    const handleAdminSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!adminSearchTerm.trim()) return;
+        setAdminLoading(true);
+        try {
+            const results = await searchUsers(adminSearchTerm);
+            setAdminSearchResults(results);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setAdminLoading(false);
+        }
+    };
+
+    const handleToggleVerify = async (targetUser: UserProfile) => {
+        if (!currentUser || !currentUser.email) return;
+        if (!window.confirm(`Are you sure you want to ${targetUser.isVerified ? 'remove' : 'add'} verification for ${targetUser.displayName}?`)) return;
+        
+        try {
+            await setVerifiedBadge(targetUser.uid, !targetUser.isVerified, currentUser.email);
+            // Refresh search results
+            const results = await searchUsers(adminSearchTerm);
+            setAdminSearchResults(results);
+            showSuccessMessage(`Verification ${targetUser.isVerified ? 'removed' : 'added'}.`);
+        } catch (e) {
+            console.error(e);
+            showErrorMessage('Failed to update verification.');
+        }
+    };
+
     const activePost = selectedPostIndex != null ? filteredPosts[selectedPostIndex] : null;
 
     const recentMediaForCollage = sortedPosts
@@ -304,7 +339,10 @@ export function Profile() {
                             </div>
                         ) : (
                             <div>
-                                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{profile?.displayName}</h1>
+                                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                                    {profile?.displayName}
+                                    {profile?.isVerified && <BadgeCheck size={24} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                                </h1>
                                 <p className="text-slate-500 dark:text-slate-400 max-w-xl">{profile?.bio || "No bio yet."}</p>
                             </div>
                         )}
@@ -355,6 +393,14 @@ export function Profile() {
                             <span className="font-semibold text-slate-900 dark:text-white">{sortedPosts.length}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-300">Followers</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{profile?.followersCount || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-300">Following</span>
+                            <span className="font-semibold text-slate-900 dark:text-white">{profile?.followingCount || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
                             <span className="text-slate-600 dark:text-slate-300">Focus hours</span>
                             <span className="font-semibold text-slate-900 dark:text-white">{totalFocusHours.toFixed(1)}</span>
                         </div>
@@ -365,6 +411,70 @@ export function Profile() {
                     </div>
                 </div>
             </div>
+
+            {/* Admin Control Panel */}
+            {currentUser?.email === 'bmgarcia0121@gmail.com' && (
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-indigo-200 dark:border-indigo-900 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4 text-indigo-600 dark:text-indigo-400">
+                        <Shield size={24} />
+                        <h2 className="text-lg font-bold">Admin Controls</h2>
+                    </div>
+                    
+                    <form onSubmit={handleAdminSearch} className="flex gap-2 mb-6">
+                        <input
+                            type="text"
+                            value={adminSearchTerm}
+                            onChange={(e) => setAdminSearchTerm(e.target.value)}
+                            placeholder="Search users by email or name..."
+                            className="flex-1 bg-slate-100 dark:bg-slate-800 border-0 rounded-lg px-4 py-2"
+                        />
+                        <button 
+                            type="submit"
+                            disabled={adminLoading}
+                            className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                            Search
+                        </button>
+                    </form>
+
+                    {adminSearchResults.length > 0 && (
+                        <div className="space-y-2">
+                            {adminSearchResults.map(user => (
+                                <div key={user.uid} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                            {user.photoURL ? (
+                                                <img src={user.photoURL} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center font-bold text-slate-400">
+                                                    {user.displayName?.[0]}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                                {user.displayName}
+                                                {user.isVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                                            </p>
+                                            <p className="text-xs text-slate-500">{user.email}</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleToggleVerify(user)}
+                                        className={`px-3 py-1 rounded-md text-xs font-bold ${
+                                            user.isVerified 
+                                                ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                                                : 'bg-green-100 text-green-600 hover:bg-green-200'
+                                        }`}
+                                    >
+                                        {user.isVerified ? 'Revoke Badge' : 'Grant Badge'}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

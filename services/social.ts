@@ -15,7 +15,8 @@ import {
     arrayUnion,
     arrayRemove,
     deleteDoc,
-    increment
+    increment,
+    runTransaction
 } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { db, auth } from './firebase';
@@ -34,6 +35,13 @@ export interface UserProfile {
     joinedAt: string;
     friends?: string[]; // List of friend UIDs
     friendRequests?: string[]; // List of UIDs who sent requests
+    followers?: string[]; // List of UIDs who follow this user
+    following?: string[]; // List of UIDs this user follows
+    followersCount?: number;
+    followingCount?: number;
+    isVerified?: boolean;
+    verifiedBy?: string;
+    verifiedAt?: string;
     savedPostIds?: string[];
     hasCompletedOnboarding?: boolean;
 }
@@ -52,6 +60,7 @@ export interface SocialPost {
     authorId: string;
     authorName: string;
     authorPhoto?: string;
+    authorIsVerified?: boolean;
     content: string;
     // Legacy single-media field kept for backwards compatibility
     mediaUrl?: string;
@@ -80,6 +89,7 @@ export interface SocialComment {
     authorId: string;
     authorName: string;
     authorPhoto?: string;
+    authorIsVerified?: boolean;
     content: string;
     createdAt: number;
 }
@@ -97,6 +107,7 @@ export interface Story {
     authorId: string;
     authorName: string;
     authorPhoto?: string;
+    authorIsVerified?: boolean;
     // Legacy single-media field kept for backwards compatibility
     mediaUrl?: string;
     // New media carousel support
@@ -143,6 +154,11 @@ export const createUserProfile = async (user: any) => {
             xp: 0,
             joinedAt: new Date().toISOString(),
             savedPostIds: [],
+            followers: [],
+            following: [],
+            followersCount: 0,
+            followingCount: 0,
+            isVerified: false,
             hasCompletedOnboarding: false
         };
         await setDoc(userRef, newProfile);
@@ -304,7 +320,7 @@ export const addComment = async (
     parentId: string,
     collectionName: 'posts' | 'stories',
     text: string,
-    user: { uid: string, displayName: string, photoURL?: string }
+    user: { uid: string, displayName: string, photoURL?: string, isVerified?: boolean }
 ) => {
     try {
         const commentsRef = collection(db, collectionName, parentId, 'comments');
@@ -312,6 +328,7 @@ export const addComment = async (
             authorId: user.uid,
             authorName: user.displayName,
             authorPhoto: user.photoURL || '',
+            authorIsVerified: user.isVerified || false,
             content: text,
             createdAt: Date.now()
         });
@@ -666,4 +683,119 @@ export const getFriendSuggestions = async (currentUid: string) => {
     const allUsers = await getAllUsers();
     // Return users who are not me and not already friends (simplified)
     return allUsers.filter(u => u.uid !== currentUid).slice(0, 5);
+};
+
+// --- FOLLOWER / FOLLOWING FUNCTIONS ---
+
+export const followUser = async (currentUserId: string, targetUserId: string) => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const currentUserRef = doc(db, 'users', currentUserId);
+            const targetUserRef = doc(db, 'users', targetUserId);
+
+            const currentUserSnap = await transaction.get(currentUserRef);
+            const targetUserSnap = await transaction.get(targetUserRef);
+
+            if (!currentUserSnap.exists() || !targetUserSnap.exists()) {
+                throw new Error("User does not exist!");
+            }
+
+            const currentUserData = currentUserSnap.data() as UserProfile;
+            const targetUserData = targetUserSnap.data() as UserProfile;
+
+            const currentFollowing = currentUserData.following || [];
+            
+            if (!currentFollowing.includes(targetUserId)) {
+                transaction.update(currentUserRef, {
+                    following: arrayUnion(targetUserId),
+                    followingCount: (currentUserData.followingCount || 0) + 1
+                });
+
+                transaction.update(targetUserRef, {
+                    followers: arrayUnion(currentUserId),
+                    followersCount: (targetUserData.followersCount || 0) + 1
+                });
+            }
+        });
+    } catch (e) {
+        console.error("Transaction failed: ", e);
+        throw e;
+    }
+};
+
+export const unfollowUser = async (currentUserId: string, targetUserId: string) => {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const currentUserRef = doc(db, 'users', currentUserId);
+            const targetUserRef = doc(db, 'users', targetUserId);
+
+            const currentUserSnap = await transaction.get(currentUserRef);
+            const targetUserSnap = await transaction.get(targetUserRef);
+
+            if (!currentUserSnap.exists() || !targetUserSnap.exists()) {
+                throw new Error("User does not exist!");
+            }
+
+            const currentUserData = currentUserSnap.data() as UserProfile;
+            const targetUserData = targetUserSnap.data() as UserProfile;
+
+            const currentFollowing = currentUserData.following || [];
+            
+            if (currentFollowing.includes(targetUserId)) {
+                transaction.update(currentUserRef, {
+                    following: arrayRemove(targetUserId),
+                    followingCount: Math.max((currentUserData.followingCount || 1) - 1, 0)
+                });
+
+                transaction.update(targetUserRef, {
+                    followers: arrayRemove(currentUserId),
+                    followersCount: Math.max((targetUserData.followersCount || 1) - 1, 0)
+                });
+            }
+        });
+    } catch (e) {
+        console.error("Transaction failed: ", e);
+        throw e;
+    }
+};
+
+// --- ADMIN FUNCTIONS ---
+
+export const setVerifiedBadge = async (targetUserId: string, isVerified: boolean, adminEmail: string) => {
+    const allowedAdmin = 'bmgarcia0121@gmail.com';
+    
+    if (adminEmail !== allowedAdmin) {
+        throw new Error('Unauthorized: Only admin can change verification status');
+    }
+
+    const userRef = doc(db, 'users', targetUserId);
+    
+    await updateDoc(userRef, {
+        isVerified: isVerified,
+        verifiedBy: isVerified ? adminEmail : '',
+        verifiedAt: isVerified ? new Date().toISOString() : ''
+    });
+};
+
+export const searchUsers = async (searchTerm: string) => {
+    const usersRef = collection(db, 'users');
+    
+    // Try to find by email first
+    const qEmail = query(usersRef, where('email', '==', searchTerm));
+    const emailSnap = await getDocs(qEmail);
+    
+    if (!emailSnap.empty) {
+        return emailSnap.docs.map(d => d.data() as UserProfile);
+    }
+
+    // Prefix search for displayName
+    const qName = query(usersRef, 
+        orderBy('displayName'), 
+        where('displayName', '>=', searchTerm), 
+        where('displayName', '<=', searchTerm + '\uf8ff'),
+        limit(10)
+    );
+    
+    const nameSnap = await getDocs(qName);
+    return nameSnap.docs.map(d => d.data() as UserProfile);
 };

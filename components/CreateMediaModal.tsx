@@ -153,7 +153,8 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             const authorData = {
                 authorId: currentUser.uid,
                 authorName: userProfile?.displayName || 'Student',
-                authorPhoto: userProfile?.photoURL
+                authorPhoto: userProfile?.photoURL,
+                authorIsVerified: userProfile?.isVerified
             };
 
             const mediaPayload = media.length ? media : undefined;

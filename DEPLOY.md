@@ -39,9 +39,25 @@ This project is ready to be deployed to Netlify.
         -   `VITE_FIREBASE_APP_ID`
         -   `VITE_GEMINI_API_KEY`
         -   `VITE_OPENAI_API_KEY`
+        -   `VITE_LIVEKIT_URL`
+        -   `VITE_LIVEKIT_TOKEN_ENDPOINT`
 
 5.  **Deploy**:
     -   Click "Deploy Site".
+
+## LiveKit Setup
+To enable voice channels, you need a LiveKit instance (Cloud or Self-hosted).
+
+1.  **Sign up for LiveKit Cloud** or host your own server.
+2.  **Get API Key and Secret** for your project.
+3.  **Set up a Token Endpoint**:
+    -   You need a backend service to generate access tokens.
+    -   You can use a Cloud Function, Lambda, or a simple Node.js server.
+    -   The endpoint should accept `roomName` and `participantName` (and optionally `identity`).
+    -   It should return a JSON object: `{ "token": "..." }`.
+4.  **Configure Environment Variables**:
+    -   `VITE_LIVEKIT_URL`: Your LiveKit WebSocket URL (e.g., `wss://your-project.livekit.cloud`).
+    -   `VITE_LIVEKIT_TOKEN_ENDPOINT`: The URL of your token generation endpoint.
 
 ## Troubleshooting
 -   **Secret Scanning Errors**: The `netlify.toml` file now includes `SECRETS_SCAN_ENABLED = "false"` to prevent build failures. Since this is a client-side AI app, API keys must be exposed to the browser.

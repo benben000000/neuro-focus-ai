@@ -181,6 +181,19 @@ export interface ChatRoom {
     };
 }
 
+export interface VoiceState {
+    userId: string;
+    channelId: string;
+    isMuted: boolean;
+    isDeafened: boolean;
+    joinedAt: number;
+    user: {
+        displayName: string;
+        photoURL?: string;
+    };
+    status?: 'study' | 'chill'; // For study-mode badges
+}
+
 // --- PROFILE FUNCTIONS ---
 
 export const createUserProfile = async (user: any) => {
@@ -881,6 +894,43 @@ export const searchUsers = async (searchTerm: string) => {
     return nameSnap.docs.map(d => d.data() as UserProfile);
 };
 
+// --- VOICE CHANNEL FUNCTIONS ---
+
+export const updateVoiceState = async (channelId: string, userId: string, state: Partial<VoiceState> | null) => {
+    const voiceStateRef = doc(db, 'chats', channelId, 'voiceStates', userId);
+    
+    if (state === null) {
+        // Remove voice state (user left)
+        await deleteDoc(voiceStateRef);
+    } else {
+        // Update or create voice state
+        // We need to handle the case where the document doesn't exist yet
+        // setDoc with merge: true works for both
+        const data = {
+            ...state,
+            userId,
+            channelId,
+            updatedAt: Date.now()
+        };
+        
+        // If joining (no joinedAt), set it
+        if (!state.joinedAt && !state.updatedAt) {
+             // If it's a new join, usually we pass joinedAt in state. 
+             // If not passed, we could set it, but let's rely on caller.
+        }
+
+        await setDoc(voiceStateRef, data, { merge: true });
+    }
+};
+
+export const subscribeToVoiceStates = (channelId: string, callback: (states: VoiceState[]) => void) => {
+    const voiceStatesRef = collection(db, 'chats', channelId, 'voiceStates');
+    // We might want to order by joinedAt
+    const q = query(voiceStatesRef, orderBy('joinedAt', 'asc'));
+
+    return onSnapshot(q, (snapshot) => {
+        const states = snapshot.docs.map(doc => doc.data() as VoiceState);
+        callback(states);
 // --- PRESENCE FUNCTIONS ---
 
 export const updatePresence = async (userId: string, data: Partial<UserPresence>) => {

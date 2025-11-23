@@ -970,10 +970,6 @@ export function Profile() {
                             Masonry
                         </button>
                         <button
-                            onClick={() => setLayoutMode('board')}
-                            className={`px-3 py-1.5 border-l border-slate-200 dark:border-slate-700 ${layoutMode === 'board' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-300'}`}
-                        >
-                            Board
                             onClick={() => setLayoutMode('moodboard')}
                             className={`px-3 py-1.5 border-l border-slate-200 dark:border-slate-700 ${layoutMode === 'moodboard' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-300'}`}
                         >

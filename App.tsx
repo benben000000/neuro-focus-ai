@@ -17,6 +17,7 @@ import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
 import { useSecurity } from './hooks/useSecurity';
+import { LanguageLab } from './components/LanguageLab';
 
 // Private Route Wrapper
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -101,6 +102,9 @@ function AppContent() {
               setAttachments={setAttachments}
               onStartVoice={() => setIsVoiceMode(true)}
             />
+          } />
+          <Route path="language" element={
+            <LanguageLab onStartVoice={() => setIsVoiceMode(true)} />
           } />
           <Route path="tools" element={
             <StudyTools

@@ -15,7 +15,8 @@ import {
     Search,
     PlusSquare,
     ChevronDown,
-    Timer
+    Timer,
+    Globe
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
@@ -101,6 +102,7 @@ export function Layout({
                 <nav className="space-y-2 flex-1">
                     <NavItem path="/dashboard" icon={Home} label="Home" />
                     <NavItem path="/tutor" icon={GraduationCap} label="AI Tutor" />
+                    <NavItem path="/language" icon={Globe} label="Language" />
                     <NavItem path="/tools" icon={LibraryBig} label="Tools" />
                     <NavItem path="/community" icon={Users} label="Community" />
                     <NavItem path="/chat" icon={MessageCircle} label="Messages" />
@@ -192,6 +194,7 @@ export function Layout({
             <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-40 pb-safe">
                 <NavItem path="/dashboard" icon={Home} label="Home" isMobile />
                 <NavItem path="/tutor" icon={GraduationCap} label="Tutor" isMobile />
+                <NavItem path="/language" icon={Globe} label="Lang" isMobile />
                 <div className="flex items-center justify-center">
                     <button
                         onClick={onStartVoice}
@@ -200,6 +203,7 @@ export function Layout({
                         <Mic size={20} />
                     </button>
                 </div>
+                <NavItem path="/tools" icon={LibraryBig} label="Tools" isMobile />
                 <NavItem path="/community" icon={Users} label="Social" isMobile />
                 <NavItem path="/profile" icon={User} label="Profile" isMobile />
             </nav>

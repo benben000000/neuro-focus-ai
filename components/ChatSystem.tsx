@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
     Group,
@@ -22,7 +22,9 @@ import {
     getUserProfile,
     ChatRoom,
     UserProfile,
-    getAllUsers
+    getAllUsers,
+    subscribeToPresence,
+    UserPresence
 } from '../services/social';
 import { GroupRail } from './chat/GroupRail';
 import { ChannelList } from './chat/ChannelList';
@@ -31,22 +33,7 @@ import { MemberSidebar } from './chat/MemberSidebar';
 import { NewGroupModal } from './chat/NewGroupModal';
 import { CreateChannelModal } from './chat/CreateChannelModal';
 import { NewDmModal } from './chat/NewDmModal';
-import { Menu, X } from 'lucide-react';
-
-export function ChatSystem() {
-    const { currentUser } = useAuth();
-    
-    // State
-    const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
-    const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
-    
-    // Data State
-    const [groups, setGroups] = useState<Group[]>([]);
-    const [channels, setChannels] = useState<Channel[]>([]);
-    const [members, setMembers] = useState<(GroupMember & Partial<UserProfile>)[]>([]);
-    const [messages, setMessages] = useState<GroupMessage[] | any[]>([]);
-    const [dmChats, setDmChats] = useState<ChatRoom[]>([]);
-import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
+import { Menu, X, Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
 import { useVoiceChannel } from '../hooks/useVoiceChannel';
 import { VoiceChannelPanel } from './chat/VoiceChannelPanel';
 
@@ -68,23 +55,35 @@ const ActiveChatPresenceText = ({ userId }: { userId: string }) => {
         return subscribeToPresence(userId, setPresence);
     }, [userId]);
     
-    if (presence?.online) return <p className="text-xs text-green-500 font-medium">Online</p>;
+    if (!presence?.online) return <p className="text-xs text-green-500 font-medium">Online</p>;
     return <p className="text-xs text-slate-500">Offline</p>;
 };
 
 export function ChatSystem() {
     const { currentUser } = useAuth();
     const voice = useVoiceChannel();
+    
+    // State
+    const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+    const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+    
+    // Data State
+    const [groups, setGroups] = useState<Group[]>([]);
+    const [channels, setChannels] = useState<Channel[]>([]);
+    const [members, setMembers] = useState<(GroupMember & Partial<UserProfile>)[]>([]);
+    const [messages, setMessages] = useState<GroupMessage[] | any[]>([]);
+    const [dmChats, setDmChats] = useState<ChatRoom[]>([]);
+    
+    // Chat State
     const [chats, setChats] = useState<ChatRoom[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [showNewChatModal, setShowNewChatModal] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [isSending, setIsSending] = useState(false);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-    const [users, setUsers] = useState<UserProfile[]>([]);
 
     // UI State
     const [showNewGroupModal, setShowNewGroupModal] = useState(false);
@@ -123,253 +122,315 @@ export function ChatSystem() {
             setChannels(fetchedChannels);
             // Auto-select first text channel if no channel selected
             if (!activeChannelId && fetchedChannels.length > 0) {
-                 const currentChannelExists = fetchedChannels.some(c => c.id === activeChannelId);
-                 if (!currentChannelExists) {
-                     const general = fetchedChannels.find(c => c.name === 'general') || fetchedChannels.find(c => c.type === 'text');
-                     if (general) setActiveChannelId(general.id);
-                 }
+                const textChannel = fetchedChannels.find(c => c.type === 'text');
+                if (textChannel) setActiveChannelId(textChannel.id);
             }
         });
 
-        const unsubMembers = subscribeToGroupMembers(activeGroupId, async (groupMembers) => {
-             // Enrich members with user profiles
-             const enriched = await Promise.all(groupMembers.map(async m => {
-                 const profile = await getUserProfile(m.userId);
-                 return { ...m, ...profile };
-             }));
-             setMembers(enriched);
-        });
+        const unsubMembers = subscribeToGroupMembers(activeGroupId, setMembers);
 
         return () => {
             unsubChannels();
             unsubMembers();
         };
-    }, [activeGroupId]);
+    }, [activeGroupId, activeChannelId]);
 
-    // Message Subscription
+    // Channel Selection Effect
     useEffect(() => {
         if (!activeChannelId) {
             setMessages([]);
             return;
         }
 
-        if (activeGroupId) {
-            // Group Channel
-            const unsub = subscribeToChannelMessages(activeGroupId, activeChannelId, setMessages);
-            return () => unsub();
-        } else {
-            // DM Chat
-            const unsub = subscribeToChat(activeChannelId, (msgs) => {
-                setMessages(msgs);
+        const unsub = subscribeToChannelMessages(activeChannelId, setMessages);
+        return unsub;
+    }, [activeChannelId]);
+
+    // Chat Selection Effect
+    useEffect(() => {
+        if (!activeChatId) {
+            setChatMessages([]);
+            return;
+        }
+
+        const unsub = subscribeToChat(activeChatId, setChatMessages);
+        return unsub;
+    }, [activeChatId]);
+
+    // Scroll to bottom on new messages
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, chatMessages]);
+
+    const handleSendMessage = useCallback(async () => {
+        if (!newMessage.trim() || isSending) return;
+
+        setIsSending(true);
+        try {
+            if (activeChannelId) {
+                await sendGroupMessage(activeChannelId, newMessage.trim());
+            } else if (activeChatId) {
+                await sendMessage(activeChatId, newMessage.trim());
+            }
+            setNewMessage('');
+        } catch (error) {
+            console.error('Failed to send message:', error);
+        } finally {
+            setIsSending(false);
+        }
+    }, [newMessage, isSending, activeChannelId, activeChatId]);
+
+    const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
+        }
+    }, [handleSendMessage]);
+
+    const handleCreateGroup = useCallback(async (groupData: { name: string; description: string }) => {
+        if (!currentUser) return;
+        
+        try {
+            const newGroup = await createGroup({
+                name: groupData.name,
+                description: groupData.description,
+                createdBy: currentUser.uid,
+                members: [currentUser.uid],
+                type: 'study'
             });
-            return () => unsub();
-        }
-    }, [activeGroupId, activeChannelId]);
-
-    // Actions
-    const handleCreateGroup = async (name: string, description: string) => {
-        if (!currentUser) return;
-        try {
-            const groupId = await createGroup(name, currentUser.uid, description);
-            setActiveGroupId(groupId);
-        } catch (error) {
-            console.error("Failed to create group", error);
-        }
-    };
-
-    const handleCreateChannel = async (name: string, type: ChannelType) => {
-        if (!activeGroupId) return;
-        try {
-            await createChannel(activeGroupId, name, type);
-        } catch (error) {
-            console.error("Failed to create channel", error);
-        }
-    };
-    
-    const handleCreateDm = async (participantId: string) => {
-        if (!currentUser) return;
-        try {
-            const otherUser = users.find(u => u.uid === participantId);
-            if (!otherUser) return;
             
-            const myProfile = userProfile || { 
-                displayName: currentUser.displayName || 'User',
-                photoURL: currentUser.photoURL || undefined
-            };
-
-            const chatId = await createOrGetDirectChat(
-                currentUser.uid,
-                { displayName: myProfile.displayName, photoURL: myProfile.photoURL },
-                participantId,
-                { displayName: otherUser.displayName, photoURL: otherUser.photoURL }
-            );
+            // Create default channels
+            await createChannel(newGroup.id, {
+                name: 'general',
+                type: 'text' as ChannelType,
+                createdBy: currentUser.uid
+            });
             
+            await createChannel(newGroup.id, {
+                name: 'voice',
+                type: 'voice' as ChannelType,
+                createdBy: currentUser.uid
+            });
+            
+            setShowNewGroupModal(false);
+            setActiveGroupId(newGroup.id);
+        } catch (error) {
+            console.error('Failed to create group:', error);
+        }
+    }, [currentUser]);
+
+    const handleCreateChannel = useCallback(async (channelData: { name: string; type: ChannelType }) => {
+        if (!activeGroupId || !currentUser) return;
+        
+        try {
+            await createChannel(activeGroupId, {
+                name: channelData.name,
+                type: channelData.type,
+                createdBy: currentUser.uid
+            });
+            setShowCreateChannelModal(false);
+        } catch (error) {
+            console.error('Failed to create channel:', error);
+        }
+    }, [activeGroupId, currentUser]);
+
+    const handleStartDM = useCallback(async (userId: string) => {
+        if (!currentUser) return;
+        
+        try {
+            const chatRoom = await createOrGetDirectChat(currentUser.uid, userId);
+            setActiveChatId(chatRoom.id);
             setActiveGroupId(null);
-            setActiveChannelId(chatId);
+            setActiveChannelId(null);
             setShowNewDmModal(false);
         } catch (error) {
-            console.error("Failed to create DM", error);
+            console.error('Failed to start DM:', error);
         }
-    };
-
-    const handleSendMessage = async (content: string) => {
-        if (!currentUser || !activeChannelId) return;
-
-        try {
-             const senderName = userProfile?.displayName || currentUser.displayName || 'User';
-             const senderPhoto = userProfile?.photoURL || currentUser.photoURL || undefined;
-
-             if (activeGroupId) {
-                 await sendGroupMessage(activeGroupId, activeChannelId, currentUser.uid, senderName, senderPhoto, content);
-             } else {
-                 await sendMessage(activeChannelId, currentUser.uid, senderName, content);
-             }
-        } catch (error) {
-            console.error("Failed to send message", error);
-        }
-    };
-
-    // Helper for DM metadata
-    const getChatMetadata = (chat: ChatRoom) => {
-        if (chat.type === 'group') {
-            return {
-                name: chat.name || 'Group Chat',
-                avatar: null,
-            };
-        }
-        if (currentUser && chat.participantsInfo) {
-            const otherId = chat.participants.find(id => id !== currentUser.uid);
-            if (otherId && chat.participantsInfo[otherId]) {
-                const info = chat.participantsInfo[otherId];
-                return {
-                    name: info.displayName,
-                    avatar: info.photoURL || null,
-                };
-            }
-        }
-        return { name: 'Chat', avatar: null };
-    };
-    
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    const activeChannel = activeGroupId 
-        ? channels.find(c => c.id === activeChannelId) 
-        : dmChats.find(c => c.id === activeChannelId);
-    
-    let channelName = 'Chat';
-    let channelType = activeGroupId ? 'text' : 'dm';
-
-    if (activeGroupId) {
-        if (activeChannel) {
-            channelName = (activeChannel as Channel).name;
-            channelType = (activeChannel as Channel).type;
-        }
-    } else {
-        if (activeChannel) {
-            channelName = getChatMetadata(activeChannel as ChatRoom).name;
-        }
-    }
+    }, [currentUser]);
 
     return (
-        <div className="h-[calc(100vh-6rem)] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex overflow-hidden relative">
-            {/* Mobile Menu Button */}
-            <button 
-                className="lg:hidden absolute top-4 left-4 z-50 p-2 bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-                {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-
-            {/* Group Rail */}
-            <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} lg:flex h-full z-40`}>
-                 <GroupRail 
-                    groups={groups}
-                    selectedGroupId={activeGroupId}
-                    onSelectGroup={(id) => {
-                        setActiveGroupId(id);
-                        setActiveChannelId(null); // Reset channel
-                        setMobileMenuOpen(false);
-                    }}
-                    onCreateGroup={() => setShowNewGroupModal(true)}
-                 />
+        <div className="flex h-full bg-white dark:bg-slate-900">
+            {/* Mobile Menu Toggle */}
+            <div className="md:hidden fixed top-4 left-4 z-10">
+                <button
+                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    className="p-2 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700"
+                >
+                    {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                </button>
             </div>
 
-            {/* Channel List */}
-            <div className={`${mobileMenuOpen ? 'flex' : 'hidden'} lg:flex h-full z-30`}>
-                <ChannelList
-                    mode={activeGroupId ? 'group' : 'dm'}
-                    group={activeGroup}
-                    channels={channels}
-                    dmChats={dmChats}
-                    selectedChannelId={activeChannelId}
-                    onSelectChannel={(id) => {
-                        setActiveChannelId(id);
-                        setMobileMenuOpen(false);
-                    }}
-                    onCreateChannel={() => setShowCreateChannelModal(true)}
-                    onCreateDM={() => setShowNewDmModal(true)}
-                    currentUserId={currentUser?.uid}
-                    getChatMetadata={getChatMetadata}
-                />
-            </div>
+            {/* Sidebar */}
+            <div className={`${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:relative w-64 h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 transition-transform duration-200 z-20`}>
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h2 className="font-bold text-lg text-slate-900 dark:text-white">Chat System</h2>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto">
+                    {/* Groups Section */}
+                    <div className="p-4">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-semibold text-slate-700 dark:text-slate-300">Study Groups</h3>
+                            <button
+                                onClick={() => setShowNewGroupModal(true)}
+                                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                            >
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <GroupRail
+                            groups={groups}
+                            activeGroupId={activeGroupId}
+                            onSelectGroup={setActiveGroupId}
+                        />
+                    </div>
 
-            {/* Message Pane */}
-            <MessagePane
-                channelName={channelName}
-                channelType={channelType as any}
-                messages={messages}
-                onSendMessage={handleSendMessage}
-                currentUser={userProfile}
-            />
-                        {/* Voice Channel Panel */}
-                        <VoiceChannelPanel channelId={activeChatId} voice={voice} />
-
-                        {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {messages.map(msg => {
-                                const isMe = msg.senderId === currentUser?.uid;
-                                return (
-                                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                        <div className={`max-w-[70%] rounded-2xl p-4 ${isMe
-                                                ? 'bg-indigo-600 text-white rounded-br-none'
-                                                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none shadow-sm'
-                                            }`}>
-                                            {!isMe && <p className="text-xs font-bold mb-1 opacity-70">{msg.senderName}</p>}
-                                            <p>{msg.content}</p>
-                                            <p className={`text-[10px] mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {/* DMs Section */}
+                    <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-semibold text-slate-700 dark:text-slate-300">Direct Messages</h3>
+                            <button
+                                onClick={() => setShowNewDmModal(true)}
+                                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                            >
+                                <Plus size={16} />
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            {dmChats.map((chat) => (
+                                <button
+                                    key={chat.id}
+                                    onClick={() => {
+                                        setActiveChatId(chat.id);
+                                        setActiveGroupId(null);
+                                        setActiveChannelId(null);
+                                    }}
+                                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                                        activeChatId === chat.id
+                                            ? 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400'
+                                            : 'hover:bg-slate-200 dark:hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative">
+                                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                                {chat.participantPhotoURL ? (
+                                                    <img src={chat.participantPhotoURL} alt={chat.participantName} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center">
+                                                        <Users size={16} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <ChatPresenceIndicator userId={chat.participantId} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-medium text-slate-900 dark:text-white truncate">
+                                                {chat.participantName}
                                             </p>
+                                            <ActiveChatPresenceText userId={chat.participantId} />
                                         </div>
                                     </div>
-                                );
-                            })}
-                            <div ref={messagesEndRef} />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col">
+                {activeGroupId ? (
+                    <>
+                        {/* Channel List */}
+                        <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                            <ChannelList
+                                channels={channels}
+                                activeChannelId={activeChannelId}
+                                onSelectChannel={setActiveChannelId}
+                                onCreateChannel={() => setShowCreateChannelModal(true)}
+                            />
                         </div>
 
-            {/* Member Sidebar (Only for groups) */}
+                        {/* Messages */}
+                        {activeChannelId ? (
+                            <MessagePane
+                                messages={messages}
+                                currentUser={currentUser}
+                                onSendMessage={handleSendMessage}
+                                isSending={isSending}
+                                newMessage={newMessage}
+                                setNewMessage={setNewMessage}
+                                onKeyPress={handleKeyPress}
+                                messagesEndRef={messagesEndRef}
+                            />
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                                Select a channel to start messaging
+                            </div>
+                        )}
+
+                        {/* Voice Channel Panel */}
+                        {voice.channelId && (
+                            <VoiceChannelPanel
+                                channelId={voice.channelId}
+                                participants={voice.participants}
+                                isMuted={voice.isMuted}
+                                isDeafened={voice.isDeafened}
+                                onToggleMute={voice.toggleMute}
+                                onToggleDeafen={voice.toggleDeafen}
+                            />
+                        )}
+                    </>
+                ) : activeChatId ? (
+                    <MessagePane
+                        messages={chatMessages}
+                        currentUser={currentUser}
+                        onSendMessage={handleSendMessage}
+                        isSending={isSending}
+                        newMessage={newMessage}
+                        setNewMessage={setNewMessage}
+                        onKeyPress={handleKeyPress}
+                        messagesEndRef={messagesEndRef}
+                    />
+                ) : (
+                    <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                        <div className="text-center">
+                            <MessageCircle size={48} className="mx-auto mb-4 opacity-50" />
+                            <p>Select a group or start a conversation</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Member Sidebar */}
             {activeGroupId && (
-                <MemberSidebar members={members} />
+                <MemberSidebar
+                    members={members}
+                    onStartDM={handleStartDM}
+                />
             )}
 
             {/* Modals */}
             {showNewGroupModal && (
-                <NewGroupModal 
+                <NewGroupModal
                     onClose={() => setShowNewGroupModal(false)}
-                    onCreate={handleCreateGroup}
+                    onCreateGroup={handleCreateGroup}
                 />
             )}
-            
+
             {showCreateChannelModal && (
                 <CreateChannelModal
                     onClose={() => setShowCreateChannelModal(false)}
-                    onCreate={handleCreateChannel}
+                    onCreateChannel={handleCreateChannel}
                 />
             )}
 
             {showNewDmModal && (
                 <NewDmModal
+                    users={users}
                     onClose={() => setShowNewDmModal(false)}
-                    onSelectUser={handleCreateDm}
-                    currentUserId={currentUser?.uid}
+                    onStartDM={handleStartDM}
                 />
             )}
         </div>

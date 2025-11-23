@@ -931,6 +931,9 @@ export const subscribeToVoiceStates = (channelId: string, callback: (states: Voi
     return onSnapshot(q, (snapshot) => {
         const states = snapshot.docs.map(doc => doc.data() as VoiceState);
         callback(states);
+    });
+};
+
 // --- PRESENCE FUNCTIONS ---
 
 export const updatePresence = async (userId: string, data: Partial<UserPresence>) => {

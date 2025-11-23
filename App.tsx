@@ -18,6 +18,7 @@ import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
 import { LanguageLab } from './components/LanguageLab';
 import { useSecurity } from './hooks/useSecurity';
+import { ErrorBoundary, SocialErrorBoundary, StudyErrorBoundary, ChatErrorBoundary } from './components/ErrorBoundary';
 
 // Private Route Wrapper
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -70,7 +71,9 @@ function AppContent() {
     <>
       {isVoiceMode && (
         <div className="fixed inset-0 z-[60]">
-          <LiveVoiceTutor onClose={() => setIsVoiceMode(false)} attachments={attachments} />
+          <ChatErrorBoundary>
+            <LiveVoiceTutor onClose={() => setIsVoiceMode(false)} attachments={attachments} />
+          </ChatErrorBoundary>
         </div>
       )}
 
@@ -97,25 +100,39 @@ function AppContent() {
             />
           } />
           <Route path="tutor" element={
-            <ChatTutor
-              attachments={attachments}
-              setAttachments={setAttachments}
-              onStartVoice={() => setIsVoiceMode(true)}
-            />
+            <ChatErrorBoundary>
+              <ChatTutor
+                attachments={attachments}
+                setAttachments={setAttachments}
+                onStartVoice={() => setIsVoiceMode(true)}
+              />
+            </ChatErrorBoundary>
           } />
           <Route path="language" element={
-            <LanguageLab onStartVoice={() => setIsVoiceMode(true)} />
+            <ChatErrorBoundary>
+              <LanguageLab onStartVoice={() => setIsVoiceMode(true)} />
+            </ChatErrorBoundary>
           } />
           <Route path="tools" element={
-            <StudyTools
-              attachments={attachments}
-              setAttachments={setAttachments}
-              onStartVoice={() => setIsVoiceMode(true)}
-            />
+            <StudyErrorBoundary>
+              <StudyTools
+                attachments={attachments}
+                setAttachments={setAttachments}
+                onStartVoice={() => setIsVoiceMode(true)}
+              />
+            </StudyErrorBoundary>
           } />
           <Route path="profile" element={<Profile />} />
-          <Route path="community" element={<SocialFeed />} />
-          <Route path="chat" element={<ChatSystem />} />
+          <Route path="community" element={
+            <SocialErrorBoundary>
+              <SocialFeed />
+            </SocialErrorBoundary>
+          } />
+          <Route path="chat" element={
+            <ChatErrorBoundary>
+              <ChatSystem />
+            </ChatErrorBoundary>
+          } />
           <Route path="settings" element={
             <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
               <h2 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">Settings</h2>
@@ -130,14 +147,16 @@ function AppContent() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ProfileProvider>
-          <ActivityProvider>
-            <AppContent />
-          </ActivityProvider>
-        </ProfileProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <ProfileProvider>
+            <ActivityProvider>
+              <AppContent />
+            </ActivityProvider>
+          </ProfileProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

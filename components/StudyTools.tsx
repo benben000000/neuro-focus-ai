@@ -7,12 +7,13 @@ import {
     Presentation, File, ZoomIn, ZoomOut, Move, Info, Calculator, Eye,
     Target, Mic, User, PlusCircle, Video as VideoIcon, PlayCircle, GraduationCap, Languages
 } from 'lucide-react';
-import { FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, ToolMode, EquationProblem, LessonPlan } from '../types';
+import { FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, ToolMode, EquationProblem, LessonPlan, ActiveRecallQuestion, ActiveRecallResponse } from '../types';
 import {
     generateFlashcards, generateQuiz, evaluateBlurting, generateMindMap,
     generateCloze, evaluateFeynman, generateDeepDivePrompt,
     generateEquationProblems, generateMemorizationText, generateIdentificationItems,
-    evaluatePeerTeachingAudio, generateLessonPlan
+    evaluatePeerTeachingAudio, generateLessonPlan,
+    generateActiveRecallQuestions, evaluateActiveRecallResponse
 } from '../services/gemini';
 import { Button } from './ui/Button';
 import { FileUploader } from './FileUploader';
@@ -197,7 +198,8 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
             PEER_TEACHING: 'Peer Teaching',
             VIDEO_EXPLAINER: 'Video Explainer',
             MAJOR_EXAM: 'Major Exam',
-            LANGUAGE_LAB: 'Language Lab'
+            LANGUAGE_LAB: 'Language Lab',
+            ACTIVE_RECALL: 'Active Recall'
         };
         setSubject(map[mode] || 'Study Tools');
     }, [mode, setSubject]);
@@ -250,6 +252,13 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
     // Video Explainer
     const [lessonPlan, setLessonPlan] = useState<LessonPlan | null>(null);
 
+    // Active Recall State
+    const [recallQuestions, setRecallQuestions] = useState<ActiveRecallQuestion[]>([]);
+    const [recallIndex, setRecallIndex] = useState(0);
+    const [recallAnswer, setRecallAnswer] = useState('');
+    const [recallResponse, setRecallResponse] = useState<ActiveRecallResponse | null>(null);
+    const [recallHistory, setRecallHistory] = useState<ActiveRecallResponse[]>([]);
+
     const resetTool = () => {
         setMode('MENU');
         setCards([]);
@@ -267,7 +276,13 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
         setMemoText('');
         setIdentItems([]);
         setPeerFeedback('');
+        setPeerFeedback('');
         setLessonPlan(null);
+
+        setRecallQuestions([]);
+        setRecallAnswer('');
+        setRecallResponse(null);
+        setRecallHistory([]);
 
         setIsLoading(false);
         setLoadingMore(false);
@@ -311,6 +326,19 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
     const launchMajorExam = () => { if (!checkFiles()) return; setMode('MAJOR_EXAM'); };
     const launchLanguageLab = () => { setMode('LANGUAGE_LAB'); };
 
+    const launchActiveRecall = async () => {
+        if (!checkFiles()) return;
+        setIsLoading(true);
+        const questions = await generateActiveRecallQuestions(attachments, 10);
+        setRecallQuestions(questions);
+        setRecallIndex(0);
+        setRecallAnswer('');
+        setRecallResponse(null);
+        setRecallHistory([]);
+        setIsLoading(false);
+        setMode('ACTIVE_RECALL');
+    };
+
     // --- Load More Handlers ---
 
     const loadMoreFlashcards = async () => {
@@ -339,12 +367,38 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
         setLoadingMore(false);
     };
 
+    const loadMoreRecallQuestions = async () => {
+        setLoadingMore(true);
+        const newQuestions = await generateActiveRecallQuestions(attachments, 5);
+        setRecallQuestions(prev => [...prev, ...newQuestions]);
+        setLoadingMore(false);
+    };
+
     // --- Renderers ---
 
     const submitBlurting = async () => { if (!topic || !textInput) return; setIsLoading(true); setFeedback(await evaluateBlurting(attachments, topic, textInput)); setIsLoading(false); };
     const submitFeynman = async () => { if (!topic || !textInput) return; setIsLoading(true); setFeedback(await evaluateFeynman(attachments, topic, textInput)); setIsLoading(false); };
     const submitDeepDive = async () => { if (!textInput) return; setIsLoading(true); setFeedback(await evaluateBlurting(attachments, deepDiveType + " Response", textInput)); setIsLoading(false); };
     const finishPeerRecording = async () => { const b64 = await stopRecording(); setIsLoading(true); setPeerFeedback(await evaluatePeerTeachingAudio(attachments, b64)); setIsLoading(false); };
+
+    const submitRecallAnswer = async () => {
+        if (!recallAnswer.trim()) return;
+        setIsLoading(true);
+        const response = await evaluateActiveRecallResponse(
+            attachments,
+            recallQuestions[recallIndex],
+            recallAnswer
+        );
+        setRecallResponse(response);
+        setRecallHistory(prev => [...prev, response]);
+
+        if (response.score >= 70) {
+            playSuccess();
+        } else {
+            playError();
+        }
+        setIsLoading(false);
+    };
 
     const checkIdentification = () => {
         const correct = identItems[identIndex].back.toLowerCase().trim();
@@ -402,6 +456,7 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <ToolCard title="Flashcards" desc="Spaced repetition basics." icon={<Layers />} color="orange" onClick={launchFlashcards} />
                 <ToolCard title="AI Quiz" desc="Test your knowledge." icon={<CheckCircle2 />} color="emerald" onClick={launchQuiz} />
+                <ToolCard title="Active Recall" desc="AI-powered retrieval practice." icon={<Brain />} color="indigo" onClick={launchActiveRecall} />
                 <ToolCard title="Blurting" desc="Active recall writing." icon={<PenTool />} color="purple" onClick={launchBlurting} />
                 <ToolCard title="Feynman" desc="Teach to learn." icon={<MessageCircleQuestion />} color="amber" onClick={launchFeynman} />
                 <ToolCard title="Mind Map" desc="Visualize connections." icon={<Network />} color="pink" onClick={launchMindMap} />
@@ -518,6 +573,210 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
 
     if (mode === 'LANGUAGE_LAB') {
         return <LanguageLab onClose={resetTool} />;
+    }
+
+    if (mode === 'ACTIVE_RECALL') {
+        if (recallQuestions.length === 0) {
+            return (
+                <div className="p-8 text-center dark:text-white">
+                    <Loader2 className="animate-spin inline mb-4" size={32} />
+                    <p>Generating active recall questions...</p>
+                </div>
+            );
+        }
+
+        const currentQuestion = recallQuestions[recallIndex];
+        const isAnswered = recallResponse !== null;
+        const avgScore = recallHistory.length > 0
+            ? Math.round(recallHistory.reduce((sum, r) => sum + r.score, 0) / recallHistory.length)
+            : 0;
+
+        return (
+            <div className="max-w-4xl mx-auto p-6 h-full">
+                <div className="flex justify-between items-center mb-6">
+                    <Button variant="ghost" onClick={resetTool} icon={<ArrowLeft size={16} />}>
+                        Back
+                    </Button>
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm text-slate-500 dark:text-slate-400">
+                            Avg Score: <strong className="text-indigo-600 dark:text-indigo-400">{avgScore}%</strong>
+                        </span>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={loadMoreRecallQuestions}
+                            icon={loadingMore ? <Loader2 className="animate-spin" /> : <PlusCircle size={16} />}
+                            disabled={loadingMore}
+                        >
+                            {loadingMore ? 'Adding...' : '+5 More'}
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Question Panel */}
+                    <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div className="flex justify-between items-start mb-6">
+                            <div>
+                                <span className="text-xs font-bold uppercase tracking-wider text-indigo-500">
+                                    {currentQuestion.difficulty}
+                                </span>
+                                <p className="text-xs text-slate-400 mt-1">{currentQuestion.topic}</p>
+                            </div>
+                            <span className="text-sm text-slate-400">
+                                {recallIndex + 1}/{recallQuestions.length}
+                            </span>
+                        </div>
+
+                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6 leading-relaxed">
+                            {currentQuestion.question}
+                        </h3>
+
+                        {!isAnswered ? (
+                            <>
+                                <textarea
+                                    className="w-full h-48 p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl resize-none text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="Type your answer here... Try to recall from memory before looking at notes!"
+                                    value={recallAnswer}
+                                    onChange={e => setRecallAnswer(e.target.value)}
+                                />
+                                <Button
+                                    className="w-full mt-4"
+                                    onClick={submitRecallAnswer}
+                                    disabled={isLoading || !recallAnswer.trim()}
+                                    icon={isLoading ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                                >
+                                    {isLoading ? 'Evaluating...' : 'Submit Answer'}
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-xl mb-4">
+                                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">
+                                        Your Answer:
+                                    </p>
+                                    <p className="text-slate-800 dark:text-slate-200 leading-relaxed">
+                                        {recallAnswer}
+                                    </p>
+                                </div>
+
+                                <div className="flex gap-3">
+                                    {recallIndex < recallQuestions.length - 1 ? (
+                                        <Button
+                                            onClick={() => {
+                                                setRecallIndex(i => i + 1);
+                                                setRecallAnswer('');
+                                                setRecallResponse(null);
+                                            }}
+                                            icon={<ChevronRight size={16} />}
+                                        >
+                                            Next Question
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            onClick={loadMoreRecallQuestions}
+                                            icon={loadingMore ? <Loader2 className="animate-spin" /> : <RefreshCw size={16} />}
+                                            disabled={loadingMore}
+                                        >
+                                            {loadingMore ? 'Loading...' : 'More Questions'}
+                                        </Button>
+                                    )}
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setRecallResponse(null)}
+                                    >
+                                        Try Again
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Feedback Panel */}
+                    <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <h3 className="font-bold mb-4 flex items-center gap-2 text-slate-900 dark:text-white">
+                            <Brain size={20} className="text-indigo-600 dark:text-indigo-400" />
+                            AI Feedback
+                        </h3>
+
+                        {isAnswered ? (
+                            <>
+                                {/* Score Badge */}
+                                <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6 ${recallResponse.score >= 80 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
+                                    recallResponse.score >= 60 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
+                                        'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                    }`}>
+                                    <Trophy size={18} />
+                                    <span className="font-bold text-lg">{recallResponse.score}%</span>
+                                </div>
+
+                                {/* Feedback */}
+                                <div className="mb-6">
+                                    <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-2 text-sm">
+                                        Feedback:
+                                    </h4>
+                                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                                        {recallResponse.feedback}
+                                    </p>
+                                </div>
+
+                                {/* Key Points */}
+                                <div className="mb-6">
+                                    <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-3 text-sm">
+                                        Key Points to Cover:
+                                    </h4>
+                                    <ul className="space-y-2">
+                                        {currentQuestion.keyPoints.map((point, i) => {
+                                            const missed = recallResponse.missedPoints.includes(point);
+                                            return (
+                                                <li
+                                                    key={i}
+                                                    className={`flex items-start gap-2 text-sm p-2 rounded ${missed
+                                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                                                        : 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                                        }`}
+                                                >
+                                                    {missed ? <X size={16} className="mt-0.5 flex-shrink-0" /> : <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" />}
+                                                    <span>{point}</span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+
+                                {/* Progress */}
+                                {recallHistory.length > 1 && (
+                                    <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-2 text-sm">
+                                            Session Progress:
+                                        </h4>
+                                        <div className="flex gap-1">
+                                            {recallHistory.map((r, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`h-2 flex-1 rounded ${r.score >= 80 ? 'bg-green-500' :
+                                                        r.score >= 60 ? 'bg-yellow-500' :
+                                                            'bg-red-500'
+                                                        }`}
+                                                    title={`Q${i + 1}: ${r.score}%`}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="text-center text-slate-400 mt-20">
+                                <Info size={32} className="mx-auto mb-3 opacity-50" />
+                                <p className="text-sm">
+                                    Submit your answer to receive AI-powered feedback and scoring.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return null;

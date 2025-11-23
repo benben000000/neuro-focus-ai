@@ -1,5 +1,5 @@
 import { GoogleGenAI, Chat, Type, Schema, FunctionDeclaration } from "@google/genai";
-import { Message, FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, EquationProblem, LiveInteractionState, LiveFlashcardData, LiveQuizData, LessonPlan } from "../types";
+import { Message, FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, EquationProblem, LiveInteractionState, LiveFlashcardData, LiveQuizData, LessonPlan, ActiveRecallQuestion, ActiveRecallResponse } from "../types";
 
 // Primary Hardcoded Key
 const PRIMARY_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -396,4 +396,127 @@ export const generateExam = async (attachments: FileAttachment[]): Promise<QuizQ
     if (response.text) return JSON.parse(response.text) as QuizQuestion[];
     return [];
   } catch (error) { return []; }
+};
+
+export const generateActiveRecallQuestions = async (
+  attachments: FileAttachment[],
+  count: number = 10
+): Promise<ActiveRecallQuestion[]> => {
+  const prompt = `Generate ${count} active recall questions based STRICTLY on the attached documents.
+    
+    REQUIREMENTS:
+    - Questions should test RETRIEVAL, not recognition
+    - Ask "What is...", "Explain...", "Describe...", "How does..." questions
+    - Each question should have 3-5 key points that a complete answer should cover
+    - Mix difficulty levels: 40% Easy, 40% Medium, 20% Hard
+    - Cover different topics/sections from the material
+    - Questions should require understanding, not just memorization
+    
+    Return JSON array with: id, question, keyPoints (array), difficulty, topic`;
+
+  try {
+    const response = await getClient().models.generateContent({
+      model: MODEL_NAME,
+      contents: prepareContentWithAttachments(prompt, attachments),
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              question: { type: Type.STRING },
+              keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+              difficulty: { type: Type.STRING, enum: ["Easy", "Medium", "Hard"] },
+              topic: { type: Type.STRING }
+            },
+            required: ["id", "question", "keyPoints", "difficulty", "topic"]
+          }
+        }
+      }
+    });
+    if (response.text) return JSON.parse(response.text) as ActiveRecallQuestion[];
+    return [];
+  } catch (error) {
+    console.error("Active Recall generation error:", error);
+    return [];
+  }
+};
+
+export const evaluateActiveRecallResponse = async (
+  attachments: FileAttachment[],
+  question: ActiveRecallQuestion,
+  userAnswer: string
+): Promise<ActiveRecallResponse> => {
+  const prompt = `Evaluate the user's answer to this active recall question.
+    
+    QUESTION: "${question.question}"
+    KEY POINTS TO COVER: ${question.keyPoints.join(', ')}
+    USER'S ANSWER: "${userAnswer}"
+    
+    EVALUATION CRITERIA:
+    - Score 0-100 based on completeness and accuracy
+    - Check if user covered the key points
+    - Be lenient with wording - accept paraphrasing
+    - Provide constructive feedback
+    - List any key points the user missed
+    
+    Compare STRICTLY against the attached documents.
+    
+    Return JSON: {
+      "score": <number 0-100>,
+      "feedback": "<2-3 sentence feedback>",
+      "missedPoints": ["<point 1>", "<point 2>"]
+    }`;
+
+  try {
+    const response = await getClient().models.generateContent({
+      model: MODEL_NAME,
+      contents: prepareContentWithAttachments(prompt, attachments),
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            score: { type: Type.INTEGER },
+            feedback: { type: Type.STRING },
+            missedPoints: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["score", "feedback", "missedPoints"]
+        }
+      }
+    });
+
+    if (response.text) {
+      const result = JSON.parse(response.text);
+      return {
+        questionId: question.id,
+        userAnswer,
+        score: result.score,
+        feedback: result.feedback,
+        missedPoints: result.missedPoints,
+        timestamp: Date.now()
+      };
+    }
+
+    return {
+      questionId: question.id,
+      userAnswer,
+      score: 0,
+      feedback: "Could not evaluate response.",
+      missedPoints: [],
+      timestamp: Date.now()
+    };
+  } catch (error) {
+    console.error("Active Recall evaluation error:", error);
+    return {
+      questionId: question.id,
+      userAnswer,
+      score: 0,
+      feedback: "Error evaluating response.",
+      missedPoints: [],
+      timestamp: Date.now()
+    };
+  }
 };

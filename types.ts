@@ -108,14 +108,14 @@ export interface LiveInteractionState {
   data: LiveFlashcardData | LiveQuizData;
 }
 
-export type ToolMode = 
-  | 'MENU' 
-  | 'FLASHCARDS' 
-  | 'QUIZ' 
-  | 'BLURTING' 
-  | 'FEYNMAN' 
-  | 'CLOZE' 
-  | 'MINDMAP' 
+export type ToolMode =
+  | 'MENU'
+  | 'FLASHCARDS'
+  | 'QUIZ'
+  | 'BLURTING'
+  | 'FEYNMAN'
+  | 'CLOZE'
+  | 'MINDMAP'
   | 'DEEP_DIVE'
   | 'EQUATION'
   | 'MEMORIZATION'
@@ -123,9 +123,27 @@ export type ToolMode =
   | 'PEER_TEACHING'
   | 'VIDEO_EXPLAINER'
   | 'LANGUAGE_LAB'
-  | 'MAJOR_EXAM';
+  | 'MAJOR_EXAM'
+  | 'ACTIVE_RECALL';
 
 export type DeepDiveType = 'SOCRATIC' | 'ELABORATION' | 'SUMMARIZATION' | 'PEER_TEACHING';
+
+export interface ActiveRecallQuestion {
+  id: string;
+  question: string;
+  keyPoints: string[];
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  topic: string;
+}
+
+export interface ActiveRecallResponse {
+  questionId: string;
+  userAnswer: string;
+  score: number;
+  feedback: string;
+  missedPoints: string[];
+  timestamp: number;
+}
 
 export interface DailyPhrase {
   id: string;

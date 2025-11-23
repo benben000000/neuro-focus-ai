@@ -5,6 +5,7 @@ import { sendMessageToGemini, getChatSession } from '../services/gemini';
 import { FileUploader } from './FileUploader';
 import { Button } from './ui/Button';
 import { LiveVoiceTutor } from './LiveVoiceTutor';
+import { useActivity } from '../contexts/ActivityContext';
 
 interface ChatTutorProps {
   attachments: FileAttachment[];
@@ -117,6 +118,7 @@ const ChatMessageBubble: React.FC<{ msg: Message }> = ({ msg }) => {
 };
 
 export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachments }) => {
+  const { setSubject } = useActivity();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -125,6 +127,11 @@ export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachment
       timestamp: Date.now()
     }
   ]);
+
+  useEffect(() => {
+    setSubject('AI Tutor');
+  }, [setSubject]);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isVoiceMode, setIsVoiceMode] = useState(false);

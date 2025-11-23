@@ -634,7 +634,7 @@ export const getAllUsers = async () => {
     return snapshot.docs.map(doc => doc.data() as UserProfile);
 };
 
-// Legacy searchUsers removed, using optimized version below
+// Previous searchUsers implementation removed in favor of the one at the end of the file
 
 export const sendFriendRequest = async (fromUid: string, toUid: string) => {
     const toUserRef = doc(db, 'users', toUid);

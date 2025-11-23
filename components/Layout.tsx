@@ -15,7 +15,8 @@ import {
     Search,
     PlusSquare,
     ChevronDown,
-    Timer
+    Timer,
+    Languages
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
@@ -102,6 +103,7 @@ export function Layout({
                     <NavItem path="/dashboard" icon={Home} label="Home" />
                     <NavItem path="/tutor" icon={GraduationCap} label="AI Tutor" />
                     <NavItem path="/tools" icon={LibraryBig} label="Tools" />
+                    <NavItem path="/language" icon={Languages} label="Language Lab" />
                     <NavItem path="/community" icon={Users} label="Community" />
                     <NavItem path="/chat" icon={MessageCircle} label="Messages" />
                     <NavItem path="/profile" icon={User} label="Profile" />

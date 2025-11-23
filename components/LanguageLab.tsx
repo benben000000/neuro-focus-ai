@@ -1,288 +1,316 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Languages, Check, RefreshCw, Volume2, MessageSquarePlus, Sparkles, Loader2, ChevronRight } from 'lucide-react';
-import { Message, DailyPhrase } from '../types';
-import { generateDailyPhrases, sendLanguageMessage } from '../services/languageCoach';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import {
+    subscribeToLanguageProgress,
+    subscribeToLanguageSettings,
+    setLanguage as setLanguageService,
+    markPhraseLearned,
+    saveWritingSample,
+    saveSpeakingSession,
+    LanguageProgress,
+    updateDailyPhrases,
+    DailyPhraseSet
+} from '../services/languageProgress';
+import { LiveVoiceTutor } from './LiveVoiceTutor';
 import { Button } from './ui/Button';
+import { Mic, PenTool, BookOpen, CheckCircle2, ChevronRight, RefreshCw, Trophy, Languages, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
+import { playSuccess, playClick } from '../services/sound';
+import { FileAttachment } from '../types';
 
 const LANGUAGES = [
-  { code: 'ES', name: 'Spanish', flag: '🇪🇸' },
-  { code: 'FR', name: 'French', flag: '🇫🇷' },
-  { code: 'DE', name: 'German', flag: '🇩🇪' },
-  { code: 'IT', name: 'Italian', flag: '🇮🇹' },
-  { code: 'JP', name: 'Japanese', flag: '🇯🇵' },
-  { code: 'CN', name: 'Chinese', flag: '🇨🇳' },
-  { code: 'PT', name: 'Portuguese', flag: '🇧🇷' },
+    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+    { code: 'fr', name: 'French', flag: '🇫🇷' },
+    { code: 'de', name: 'German', flag: '🇩🇪' },
+    { code: 'it', name: 'Italian', flag: '🇮🇹' },
+    { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+    { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
 ];
 
-// Stub for persistence
-const saveLanguageProgress = (language: string, phrases: DailyPhrase[]) => {
-  console.log(`[STUB] Saving progress for ${language}:`, phrases);
-};
-
-export const LanguageLab: React.FC = () => {
-  const [selectedLang, setSelectedLang] = useState(LANGUAGES[0]);
-  const [phrases, setPhrases] = useState<DailyPhrase[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [loadingPhrases, setLoadingPhrases] = useState(false);
-  const [sendingMsg, setSendingMsg] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Initialize Chat
-  useEffect(() => {
-    setMessages([
-      {
-        id: 'init',
-        role: 'model',
-        text: `Hola! I am your ${selectedLang.name} coach. Ready to practice? Select a phrase or just start chatting!`,
-        timestamp: Date.now()
-      }
-    ]);
-    loadPhrases(selectedLang.name);
-  }, [selectedLang]);
-
-  const loadPhrases = async (langName: string, force: boolean = false) => {
-    setLoadingPhrases(true);
-    const newPhrases = await generateDailyPhrases(langName, force);
-    setPhrases(newPhrases);
-    setLoadingPhrases(false);
-    saveLanguageProgress(langName, newPhrases);
-  };
-
-  const handleSendMessage = async () => {
-    if (!input.trim() || sendingMsg) return;
+export const LanguageLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const [currentLanguage, setCurrentLanguage] = useState<string>('es');
+    const [progress, setProgress] = useState<LanguageProgress | null>(null);
+    const [loading, setLoading] = useState(true);
     
-    const userText = input;
-    setInput('');
-    setSendingMsg(true);
+    // Modes
+    const [isVoiceActive, setIsVoiceActive] = useState(false);
+    const [voicePhrase, setVoicePhrase] = useState<string>('');
+    
+    // Writing
+    const [writingText, setWritingText] = useState('');
+    const [writingSubmitted, setWritingSubmitted] = useState(false);
+    
+    const { currentUser: user } = useAuth();
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: userText,
-      timestamp: Date.now()
+    useEffect(() => {
+        if (!user) return;
+        
+        // Subscribe to settings to get last language
+        const unsubSettings = subscribeToLanguageSettings(user.uid, (settings) => {
+            if (settings && settings.currentLanguage) {
+                setCurrentLanguage(settings.currentLanguage);
+            }
+        });
+        
+        return () => unsubSettings();
+    }, [user]);
+
+    useEffect(() => {
+        if (!user || !currentLanguage) return;
+        setLoading(true);
+        const unsubProgress = subscribeToLanguageProgress(user.uid, currentLanguage, (data) => {
+            setProgress(data);
+            setLoading(false);
+        });
+        
+        return () => unsubProgress();
+    }, [user, currentLanguage]);
+
+    const handleLanguageChange = (lang: string) => {
+        setCurrentLanguage(lang);
+        if (user) {
+            setLanguageService(user.uid, lang);
+        }
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    const generateDailyPhrases = async () => {
+        if (!user) return;
+        
+        // Mock generation for now - in production this would call Gemini
+        const phrases = [
+            { text: "Hola, ¿cómo estás?", translation: "Hello, how are you?", status: 'new' },
+            { text: "Me gustaría un café, por favor.", translation: "I would like a coffee, please.", status: 'new' },
+            { text: "No entiendo.", translation: "I don't understand.", status: 'new' }
+        ] as const;
 
-    const responseText = await sendLanguageMessage(selectedLang.name, userText, phrases);
-
-    const botMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'model',
-      text: responseText,
-      timestamp: Date.now()
+        const mockSet: DailyPhraseSet = {
+            date: new Date().toISOString().split('T')[0],
+            phrases: phrases.map(p => ({ ...p, status: 'new' as const }))
+        };
+        
+        await updateDailyPhrases(user.uid, currentLanguage, mockSet);
     };
 
-    setMessages(prev => [...prev, botMsg]);
-    setSendingMsg(false);
-  };
+    const handleMarkLearned = async (phrase: string) => {
+        if (!user) return;
+        await markPhraseLearned(user.uid, currentLanguage, phrase);
+        playSuccess();
+    };
 
-  const handlePhraseAction = (phrase: DailyPhrase, action: 'send' | 'practice' | 'example') => {
-    if (action === 'send') {
-      setInput(phrase.targetPhrase);
-    } else if (action === 'practice') {
-      const updatedPhrases = phrases.map(p => p.id === phrase.id ? { ...p, practiced: true } : p);
-      setPhrases(updatedPhrases);
-      saveLanguageProgress(selectedLang.name, updatedPhrases);
-    } else if (action === 'example') {
-      const userText = `Can you give me examples of how to use "${phrase.targetPhrase}"?`;
-      // Directly send this as a message
-      setInput('');
-      setSendingMsg(true);
-      
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'user',
-        text: userText,
-        timestamp: Date.now()
-      }]);
+    const handleVoiceFeedback = async (data: any) => {
+        if (!user) return;
+        // Expected data from tool call: { score, confidence, feedback }
+        console.log("Voice Feedback:", data);
+        if (data.score !== undefined) {
+            await saveSpeakingSession(user.uid, currentLanguage, voicePhrase, data.score, data.confidence || 0);
+        }
+    };
 
-      sendLanguageMessage(selectedLang.name, userText, phrases).then(responseText => {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'model',
-          text: responseText,
-          timestamp: Date.now()
-        }]);
-        setSendingMsg(false);
-      });
+    const submitWriting = async () => {
+        if (!user || !writingText.trim()) return;
+        
+        await saveWritingSample(user.uid, currentLanguage, writingText, "Great job practicing!"); // Mock feedback
+        setWritingSubmitted(true);
+        playSuccess();
+        setTimeout(() => {
+            setWritingSubmitted(false);
+            setWritingText('');
+        }, 3000);
+    };
+
+    const today = new Date().toISOString().split('T')[0];
+    const todaysPhrases = progress?.dailyPhrases?.find(p => p.date === today);
+
+    if (loading && !progress) {
+        return <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin text-indigo-500" size={40} /></div>;
     }
-  };
 
-  // Auto-scroll chat
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  return (
-    <div className="h-[calc(100vh-4rem)] max-w-7xl mx-auto p-4 flex flex-col lg:flex-row gap-6">
-      
-      {/* LEFT: CHAT AREA */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white dark:bg-slate-900 z-10">
-          <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-full flex items-center justify-center">
-               <Languages size={20} />
-             </div>
-             <div>
-               <h2 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                 Language Lab <span className="text-xs font-normal px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 rounded-full border border-indigo-100 dark:border-indigo-800">Beta</span>
-               </h2>
-               <p className="text-xs text-slate-500">Immersive AI Conversation</p>
-             </div>
-          </div>
-          
-          {/* Language Selector */}
-          <div className="relative group">
-            <button className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-              <span className="text-lg">{selectedLang.flag}</span>
-              <span>{selectedLang.name}</span>
-            </button>
-            <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-               {LANGUAGES.map(lang => (
-                 <button
-                   key={lang.code}
-                   onClick={() => setSelectedLang(lang)}
-                   className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 first:rounded-t-xl last:rounded-b-xl
-                     ${selectedLang.code === lang.code ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600' : 'text-slate-700 dark:text-slate-300'}
-                   `}
-                 >
-                   <span className="text-lg">{lang.flag}</span>
-                   {lang.name}
-                 </button>
-               ))}
+    return (
+        <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+            {/* Header */}
+            <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" onClick={onClose} icon={<ArrowLeft size={16} />}>Back</Button>
+                    <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                        <Languages className="text-indigo-500" /> Language Lab
+                    </h1>
+                </div>
+                
+                <div className="flex gap-2">
+                    {LANGUAGES.map(l => (
+                        <button
+                            key={l.code}
+                            onClick={() => handleLanguageChange(l.code)}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${currentLanguage === l.code ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                        >
+                            <span className="mr-1">{l.flag}</span> {l.name}
+                        </button>
+                    ))}
+                </div>
             </div>
-          </div>
-        </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 dark:bg-slate-950/50">
-          {messages.map(msg => (
-            <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'}`}>
-                {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
-              </div>
-              <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-wrap
-                ${msg.role === 'user' 
-                  ? 'bg-indigo-600 text-white rounded-tr-none' 
-                  : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 dark:border-slate-700 rounded-tl-none'
-                }`}>
-                {msg.text}
-              </div>
+            <div className="p-6 max-w-6xl mx-auto w-full space-y-8">
+                
+                {/* Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg"><BookOpen size={20} /></div>
+                            <h3 className="font-bold text-slate-700 dark:text-slate-200">Vocabulary</h3>
+                        </div>
+                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{progress?.learnedWords?.length || 0}</p>
+                        <p className="text-sm text-slate-500">Words learned</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><PenTool size={20} /></div>
+                            <h3 className="font-bold text-slate-700 dark:text-slate-200">Writing</h3>
+                        </div>
+                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{progress?.writingSamples?.length || 0}</p>
+                        <p className="text-sm text-slate-500">Samples submitted</p>
+                    </div>
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><Mic size={20} /></div>
+                            <h3 className="font-bold text-slate-700 dark:text-slate-200">Speaking</h3>
+                        </div>
+                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{progress?.speakingSessions?.length || 0}</p>
+                        <p className="text-sm text-slate-500">Sessions completed</p>
+                    </div>
+                </div>
+
+                {/* Daily Phrases */}
+                <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <Sparkles className="text-yellow-500" /> Daily Phrases
+                        </h2>
+                        {!todaysPhrases && (
+                            <Button onClick={generateDailyPhrases} size="sm" icon={<RefreshCw size={14} />}>Generate Today's Set</Button>
+                        )}
+                    </div>
+
+                    {todaysPhrases ? (
+                        <div className="grid grid-cols-1 gap-4">
+                            {todaysPhrases.phrases.map((phrase, idx) => {
+                                const isLearned = progress?.learnedWords?.includes(phrase.text);
+                                return (
+                                    <div key={idx} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <div>
+                                            <p className="text-lg font-medium text-slate-900 dark:text-white">{phrase.text}</p>
+                                            <p className="text-slate-500 dark:text-slate-400">{phrase.translation}</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button 
+                                                size="sm" 
+                                                variant="secondary"
+                                                onClick={() => {
+                                                    setVoicePhrase(phrase.text);
+                                                    setIsVoiceActive(true);
+                                                }}
+                                                icon={<Mic size={14} />}
+                                            >
+                                                Practice
+                                            </Button>
+                                            <Button 
+                                                size="sm"
+                                                variant={isLearned ? "ghost" : "primary"}
+                                                disabled={isLearned}
+                                                onClick={() => handleMarkLearned(phrase.text)}
+                                                icon={isLearned ? <CheckCircle2 size={14} /> : undefined}
+                                            >
+                                                {isLearned ? 'Learned' : 'Mark Learned'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-center py-10 text-slate-500">
+                            <p>No phrases for today yet. Click generate to start.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Speaking Practice Panel */}
+                    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-8 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-32 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                        <div className="relative z-10">
+                            <h2 className="text-2xl font-bold mb-2">Speaking Practice</h2>
+                            <p className="text-indigo-100 mb-8">Improve your pronunciation with real-time AI feedback.</p>
+                            
+                            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 mb-6">
+                                <p className="font-mono text-sm opacity-70 mb-2">LATEST SESSION</p>
+                                {progress?.speakingSessions && progress.speakingSessions.length > 0 ? (
+                                    <div>
+                                        <div className="flex justify-between items-end">
+                                            <span className="text-3xl font-bold">{progress.speakingSessions[progress.speakingSessions.length - 1].pronunciationScore}%</span>
+                                            <span className="text-sm opacity-80 mb-1">Score</span>
+                                        </div>
+                                        <p className="text-sm truncate opacity-80 mt-1">"{progress.speakingSessions[progress.speakingSessions.length - 1].phrase}"</p>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm italic opacity-70">No sessions yet</p>
+                                )}
+                            </div>
+
+                            <Button 
+                                className="w-full bg-white text-indigo-600 hover:bg-indigo-50 border-none" 
+                                onClick={() => {
+                                    setVoicePhrase("General conversation");
+                                    setIsVoiceActive(true);
+                                }}
+                                icon={<Mic />}
+                            >
+                                Start Session
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Writing Practice Module */}
+                    <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-2">
+                            <PenTool className="text-blue-500" /> Writing Lab
+                        </h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Write a journal entry or practice sentences.</p>
+                        
+                        <textarea 
+                            className="flex-1 w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-4 resize-none focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white"
+                            placeholder={`Write something in ${LANGUAGES.find(l => l.code === currentLanguage)?.name}...`}
+                            value={writingText}
+                            onChange={(e) => setWritingText(e.target.value)}
+                        />
+                        
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-400">{writingText.length} chars</span>
+                            <Button 
+                                onClick={submitWriting} 
+                                disabled={!writingText.trim() || writingSubmitted}
+                                className={writingSubmitted ? "bg-green-600 hover:bg-green-700" : ""}
+                            >
+                                {writingSubmitted ? "Saved!" : "Submit & Save"}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-          ))}
-          {sendingMsg && (
-            <div className="flex gap-3">
-               <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0"><Bot size={14} /></div>
-               <div className="bg-white dark:bg-slate-800 px-4 py-3 rounded-2xl rounded-tl-none border border-slate-100 dark:border-slate-700 shadow-sm">
-                 <Loader2 size={16} className="animate-spin text-slate-400" />
-               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
 
-        {/* Input */}
-        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
-          <div className="relative">
-            <input 
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder={`Type in ${selectedLang.name}...`}
-              className="w-full pl-4 pr-12 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-slate-800 dark:text-white placeholder:text-slate-400"
-            />
-            <button 
-              onClick={handleSendMessage}
-              disabled={!input.trim() || sendingMsg}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            >
-              <Send size={16} />
-            </button>
-          </div>
+            {isVoiceActive && (
+                <LiveVoiceTutor 
+                    onClose={() => setIsVoiceActive(false)} 
+                    attachments={[]}
+                    mode="pronunciation"
+                    targetPhrase={voicePhrase}
+                    systemInstructionOverride={`You are a language tutor for ${LANGUAGES.find(l => l.code === currentLanguage)?.name}. 
+The user is practicing the phrase: "${voicePhrase}".
+Listen to their pronunciation.
+After they speak, you MUST use the 'provide_pronunciation_score' tool to give them a score out of 100 and feedback.
+Be encouraging but precise about accent and intonation.`}
+                    onFeedback={handleVoiceFeedback}
+                />
+            )}
         </div>
-      </div>
-
-      {/* RIGHT: DAILY PHRASES */}
-      <div className="w-full lg:w-80 flex flex-col bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden h-[500px] lg:h-auto">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900">
-          <h3 className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-            <Sparkles size={16} className="text-amber-500" />
-            Daily Pack
-          </h3>
-          <Button variant="ghost" size="sm" onClick={() => loadPhrases(selectedLang.name, true)} disabled={loadingPhrases}>
-            <RefreshCw size={14} className={loadingPhrases ? 'animate-spin' : ''} />
-          </Button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-           {loadingPhrases ? (
-             <div className="text-center py-10 text-slate-400 flex flex-col items-center gap-2">
-               <Loader2 size={24} className="animate-spin" />
-               <span className="text-xs">Generating phrases...</span>
-             </div>
-           ) : phrases.length === 0 ? (
-             <div className="text-center py-10 text-slate-400 text-sm">
-               No phrases yet.
-             </div>
-           ) : (
-             phrases.map(phrase => (
-               <div key={phrase.id} className={`p-3 rounded-xl border transition-all group
-                 ${phrase.practiced 
-                   ? 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' 
-                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800'
-                 }
-               `}>
-                 <div className="flex justify-between items-start mb-1">
-                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wide
-                      ${phrase.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 
-                        phrase.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 
-                        'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'}
-                    `}>
-                      {phrase.difficulty}
-                    </span>
-                    {phrase.practiced && <Check size={14} className="text-green-600" />}
-                 </div>
-                 
-                 <p className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">{phrase.targetPhrase}</p>
-                 <p className="text-xs text-slate-500 dark:text-slate-400 italic mb-2">{phrase.translation}</p>
-                 
-                 <div className="flex gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
-                    <button 
-                      onClick={() => handlePhraseAction(phrase, 'send')}
-                      className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                    >
-                      <MessageSquarePlus size={12} /> Use
-                    </button>
-                    <button 
-                      onClick={() => handlePhraseAction(phrase, 'example')}
-                      className="w-8 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-indigo-600 rounded-lg border border-slate-100 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
-                      title="Request Example"
-                    >
-                      <span className="text-xs font-bold">?</span>
-                    </button>
-                    <button 
-                      onClick={() => handlePhraseAction(phrase, 'practice')}
-                      disabled={phrase.practiced}
-                      className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg transition-colors
-                        ${phrase.practiced 
-                          ? 'bg-transparent text-green-600 cursor-default' 
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                        }
-                      `}
-                    >
-                      {phrase.practiced ? 'Done' : 'Mark'}
-                    </button>
-                 </div>
-               </div>
-             ))
-           )}
-        </div>
-      </div>
-
-    </div>
-  );
+    );
 };

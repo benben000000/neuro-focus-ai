@@ -8,6 +8,10 @@ import { FileAttachment, LiveInteractionState, LiveFlashcardData, LiveQuizData }
 interface LiveVoiceTutorProps {
   onClose: () => void;
   attachments: FileAttachment[];
+  mode?: 'general' | 'pronunciation';
+  systemInstructionOverride?: string;
+  onFeedback?: (data: any) => void;
+  targetPhrase?: string;
 }
 
 // Helper to convert Float32Array (Web Audio) to PCM Int16 (Gemini)
@@ -87,12 +91,25 @@ const toolDeclarations: FunctionDeclaration[] = [
       },
       required: ["question", "options", "correctIndex"]
     }
+  },
+  {
+    name: "provide_pronunciation_score",
+    description: "Provide pronunciation score and feedback after the user speaks the target phrase.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        score: { type: Type.NUMBER, description: "Score out of 100" },
+        confidence: { type: Type.NUMBER, description: "Confidence 0-1" },
+        feedback: { type: Type.STRING, description: "Detailed feedback on pronunciation" }
+      },
+      required: ["score", "confidence", "feedback"]
+    }
   }
 ];
 
 const PRIMARY_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachments }) => {
+export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachments, mode = 'general', systemInstructionOverride, onFeedback, targetPhrase }) => {
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [isMuted, setIsMuted] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -159,13 +176,15 @@ export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachm
         }
       });
 
-      const systemInstruction = `You are NeuroFocus, an advanced AI tutor.
+      const defaultSystemInstruction = `You are NeuroFocus, an advanced AI tutor.
         CONTEXT DOCUMENTS: ${fileContext}
         PROTOCOL:
         1. **Strict Grounding**: Use the text above. If I ask about the file, answer from it.
         2. **Socratic Method**: Don't just lecture. Ask me questions to check my understanding.
         3. **Concise**: Keep responses short and conversational.
         4. **Adaptive**: Adjust difficulty based on my answers.`;
+      
+      const systemInstruction = systemInstructionOverride || defaultSystemInstruction;
 
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-09-2025',
@@ -224,6 +243,10 @@ export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachm
                 } else if (call.name === 'start_interactive_quiz') {
                   setActiveInteraction({ type: 'QUIZ', data: call.args as unknown as LiveQuizData });
                   setQuizSelected(null);
+                } else if (call.name === 'provide_pronunciation_score') {
+                  if (onFeedback) {
+                    onFeedback(call.args);
+                  }
                 }
               }
             }

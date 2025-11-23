@@ -5,7 +5,7 @@ import {
     RefreshCw, Loader2, AlertCircle, Layers, FileText, PenTool,
     MessageCircleQuestion, Share2, Sparkles, Network, Trophy, Dna, X,
     Presentation, File, ZoomIn, ZoomOut, Move, Info, Calculator, Eye,
-    Target, Mic, User, PlusCircle, Video as VideoIcon, PlayCircle, GraduationCap
+    Target, Mic, User, PlusCircle, Video as VideoIcon, PlayCircle, GraduationCap, Languages
 } from 'lucide-react';
 import { FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, ToolMode, EquationProblem, LessonPlan } from '../types';
 import {
@@ -18,6 +18,7 @@ import { Button } from './ui/Button';
 import { FileUploader } from './FileUploader';
 import { LiveVoiceTutor } from './LiveVoiceTutor';
 import { MajorExamMode } from './MajorExamMode';
+import { LanguageLab } from './LanguageLab';
 import { playClick, playSuccess, playError } from '../services/sound';
 
 interface StudyToolsProps {
@@ -283,11 +284,10 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
         setLessonPlan(await generateLessonPlan(attachments));
         setIsLoading(false);
         setMode('VIDEO_EXPLAINER');
-        setIsLoading(false);
-        setMode('VIDEO_EXPLAINER');
     };
 
     const launchMajorExam = () => { if (!checkFiles()) return; setMode('MAJOR_EXAM'); };
+    const launchLanguageLab = () => { setMode('LANGUAGE_LAB'); };
 
     // --- Load More Handlers ---
 
@@ -389,9 +389,9 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
                 <ToolCard title="Memorization" desc="Text occlusion." icon={<Eye />} color="indigo" onClick={launchMemorization} />
                 <ToolCard title="Identify" desc="Guess the concept." icon={<Target />} color="rose" onClick={launchIdentification} />
                 <ToolCard title="Peer Teach" desc="Audio roleplay." icon={<Mic />} color="sky" onClick={launchPeerTeaching} />
-                <ToolCard title="Peer Teach" desc="Audio roleplay." icon={<Mic />} color="sky" onClick={launchPeerTeaching} />
                 <ToolCard title="Video Explainer" desc="Interactive lecture." icon={<VideoIcon />} color="lime" onClick={launchVideoExplainer} />
                 <ToolCard title="Major Exam" desc="Full 20-question test." icon={<GraduationCap />} color="indigo" onClick={launchMajorExam} />
+                <ToolCard title="Language Lab" desc="Practice speaking & writing." icon={<Languages />} color="rose" onClick={launchLanguageLab} />
             </div>
             {isLoading && <div className="fixed inset-0 bg-white/80 dark:bg-slate-900/80 z-50 flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600 dark:text-indigo-400" size={48} /></div>}
         </div>
@@ -492,6 +492,10 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
 
     if (mode === 'MAJOR_EXAM') {
         return <MajorExamMode attachments={attachments} onClose={resetTool} />;
+    }
+
+    if (mode === 'LANGUAGE_LAB') {
+        return <LanguageLab onClose={resetTool} />;
     }
 
     return null;

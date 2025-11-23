@@ -44,6 +44,18 @@ export interface UserProfile {
     verifiedAt?: string;
     savedPostIds?: string[];
     hasCompletedOnboarding?: boolean;
+    moodBoardConfig?: {
+        posts: {
+            postId: string;
+            x: number;
+            y: number;
+            rotation: number;
+            scale: number;
+            zIndex: number;
+            isFeatured?: boolean;
+        }[];
+        panelOffset?: { x: number; y: number };
+    };
 }
 
 // Rich media descriptor used by the unified composer for posts & stories

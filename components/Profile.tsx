@@ -6,7 +6,133 @@ import { getProgress } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Move, Star } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles } from 'lucide-react';
 import { CommentThread } from './CommentThread';
+
+const DraggablePostCard = ({
+    post,
+    config,
+    isOwner,
+    onUpdate,
+    onInteract,
+    maxZ,
+    onBringToFront
+}: {
+    post: SocialPost;
+    config: {
+        postId: string;
+        x: number;
+        y: number;
+        rotation: number;
+        scale: number;
+        zIndex: number;
+        isFeatured?: boolean;
+    };
+    isOwner: boolean;
+    onUpdate: (id: string, updates: Partial<typeof config>) => void;
+    onInteract: () => void;
+    maxZ: number;
+    onBringToFront: () => void;
+}) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const [currentPos, setCurrentPos] = useState({ x: config.x, y: config.y });
+    const dragDistance = useRef(0);
+
+    useEffect(() => {
+        setCurrentPos({ x: config.x, y: config.y });
+    }, [config.x, config.y]);
+
+    const handlePointerDown = (e: React.PointerEvent) => {
+        if (!isOwner) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+        setDragStart({ x: e.clientX - currentPos.x, y: e.clientY - currentPos.y });
+        dragDistance.current = 0;
+        onBringToFront();
+        (e.target as Element).setPointerCapture(e.pointerId);
+    };
+
+    const handlePointerMove = (e: React.PointerEvent) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const newX = e.clientX - dragStart.x;
+        const newY = e.clientY - dragStart.y;
+        setCurrentPos({ x: newX, y: newY });
+        dragDistance.current += Math.abs(e.movementX) + Math.abs(e.movementY);
+    };
+
+    const handlePointerUp = (e: React.PointerEvent) => {
+        if (!isDragging) {
+             // If not dragging (e.g. visitor click), we want to interact
+             if (!isOwner) onInteract();
+             return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        (e.target as Element).releasePointerCapture(e.pointerId);
+
+        if (dragDistance.current < 5) {
+            onInteract();
+        } else {
+            onUpdate(post.id, { x: currentPos.x, y: currentPos.y });
+        }
+    };
+    
+    // For visitors, simple click handler
+    const handleClick = (e: React.MouseEvent) => {
+        if (!isOwner) {
+            onInteract();
+        }
+    };
+
+    const toggleFeatured = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onUpdate(post.id, { isFeatured: !config.isFeatured });
+    };
+
+    const thumbnailUrl = post.media && post.media.length > 0 ? post.media[0].url : post.mediaUrl;
+    if (!thumbnailUrl) return null;
+
+    return (
+        <div
+            className="absolute touch-none select-none transition-shadow"
+            style={{
+                transform: `translate(${currentPos.x}px, ${currentPos.y}px) rotate(${config.rotation}deg) scale(${config.scale * (config.isFeatured ? 1.2 : 1)})`,
+                zIndex: config.zIndex,
+                width: 180,
+                cursor: isOwner ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
+            }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onClick={handleClick}
+        >
+            <div className={`relative bg-white dark:bg-slate-800 p-2 rounded-lg shadow-md ${isDragging ? 'shadow-2xl scale-105' : ''} transition-all duration-200`}>
+                <div className="relative aspect-[4/5] overflow-hidden rounded-md pointer-events-none">
+                    <img src={thumbnailUrl} className="w-full h-full object-cover" draggable={false} />
+                    {config.isFeatured && (
+                        <div className="absolute top-2 right-2 text-yellow-400 drop-shadow-md">
+                            <Star size={20} fill="currentColor" />
+                        </div>
+                    )}
+                </div>
+                
+                {isOwner && (
+                    <button 
+                        onClick={toggleFeatured}
+                        className={`absolute -top-2 -right-2 p-1.5 rounded-full shadow-md border transition-colors ${config.isFeatured ? 'bg-yellow-100 text-yellow-600 border-yellow-200' : 'bg-white dark:bg-slate-700 text-slate-400 border-slate-200 dark:border-slate-600 hover:text-yellow-500'}`}
+                    >
+                        <Star size={14} fill={config.isFeatured ? "currentColor" : "none"} />
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export function Profile() {
     const { currentUser } = useAuth();
@@ -30,10 +156,113 @@ export function Profile() {
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    const [layoutMode, setLayoutMode] = useState<'grid' | 'masonry' | 'moodboard'>('grid');
     const [activeFilter, setActiveFilter] = useState<'all' | 'study' | 'notes' | 'highlights' | 'saved'>('all');
     const [selectedPostIndex, setSelectedPostIndex] = useState<number | null>(null);
     const [progressSummary, setProgressSummary] = useState<UserProgress | null>(null);
     const [viewerTouchStartX, setViewerTouchStartX] = useState<number | null>(null);
+
+    // Mood Board State
+    const [moodBoardPosts, setMoodBoardPosts] = useState<NonNullable<UserProfile['moodBoardConfig']>['posts']>([]);
+    const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
+    const [isDraggingBoard, setIsDraggingBoard] = useState(false);
+    const [boardDragStart, setBoardDragStart] = useState({ x: 0, y: 0 });
+    const moodBoardRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (layoutMode === 'moodboard' && userPosts.length > 0) {
+            // Filter posts that are actually in the userPosts (in case some were deleted)
+            const availablePostIds = new Set(userPosts.map(p => p.id));
+            
+            if (profile?.moodBoardConfig?.posts && profile.moodBoardConfig.posts.length > 0) {
+                 // Merge stored config with current posts availability
+                 const validConfigPosts = profile.moodBoardConfig.posts.filter(p => availablePostIds.has(p.postId));
+                 
+                 // Add new posts that aren't in config yet
+                 const existingConfigIds = new Set(validConfigPosts.map(p => p.postId));
+                 const newPosts = userPosts.filter(p => !existingConfigIds.has(p.id));
+                 
+                 const additionalLayout = newPosts.map((post, i) => ({
+                    postId: post.id,
+                    x: (validConfigPosts.length + i) % 3 * 220 + 20,
+                    y: Math.floor((validConfigPosts.length + i) / 3) * 280 + 20,
+                    rotation: (Math.random() - 0.5) * 6,
+                    scale: 1,
+                    zIndex: (validConfigPosts.length + i) + 1,
+                    isFeatured: false
+                }));
+
+                setMoodBoardPosts([...validConfigPosts, ...additionalLayout]);
+                setPanelOffset(profile.moodBoardConfig.panelOffset || { x: 0, y: 0 });
+            } else {
+                // Initialize default layout
+                const initialLayout = userPosts.slice(0, 20).map((post, i) => ({
+                    postId: post.id,
+                    x: (i % 3) * 200 + 40,
+                    y: Math.floor(i / 3) * 260 + 40,
+                    rotation: (Math.random() - 0.5) * 8,
+                    scale: 1,
+                    zIndex: i + 1,
+                    isFeatured: false
+                }));
+                setMoodBoardPosts(initialLayout);
+            }
+        }
+    }, [layoutMode, profile, userPosts]);
+
+    const saveMoodBoard = async () => {
+        if (!currentUser) return;
+        setSaveLoading(true);
+        try {
+            await updateUserProfile(currentUser.uid, {
+                moodBoardConfig: {
+                    posts: moodBoardPosts,
+                    panelOffset
+                }
+            });
+            await refreshProfile();
+            showSuccessMessage('Mood board saved!');
+        } catch (e) {
+            console.error(e);
+            showErrorMessage('Failed to save mood board.');
+        } finally {
+            setSaveLoading(false);
+        }
+    };
+
+
+    const handlePostUpdate = (postId: string, updates: Partial<NonNullable<UserProfile['moodBoardConfig']>['posts'][0]>) => {
+        setMoodBoardPosts(prev => prev.map(p => p.postId === postId ? { ...p, ...updates } : p));
+    };
+
+    const handleBringToFront = (postId: string) => {
+        setMoodBoardPosts(prev => {
+            const maxZ = Math.max(...prev.map(p => p.zIndex), 0);
+            return prev.map(p => p.postId === postId ? { ...p, zIndex: maxZ + 1 } : p);
+        });
+    };
+
+    const handleBoardPointerDown = (e: React.PointerEvent) => {
+        e.preventDefault();
+        setIsDraggingBoard(true);
+        setBoardDragStart({ x: e.clientX - panelOffset.x, y: e.clientY - panelOffset.y });
+        (e.target as Element).setPointerCapture(e.pointerId);
+    };
+
+    const handleBoardPointerMove = (e: React.PointerEvent) => {
+        if (!isDraggingBoard) return;
+        e.preventDefault();
+        setPanelOffset({
+            x: e.clientX - boardDragStart.x,
+            y: e.clientY - boardDragStart.y
+        });
+    };
+
+    const handleBoardPointerUp = (e: React.PointerEvent) => {
+        if (!isDraggingBoard) return;
+        setIsDraggingBoard(false);
+        (e.target as Element).releasePointerCapture(e.pointerId);
+    };
 
     // Admin State
     const [adminSearchTerm, setAdminSearchTerm] = useState('');
@@ -712,11 +941,75 @@ export function Profile() {
                             className={`px-3 py-1.5 border-l border-slate-200 dark:border-slate-700 ${layoutMode === 'board' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-300'}`}
                         >
                             Board
+                            onClick={() => setLayoutMode('moodboard')}
+                            className={`px-3 py-1.5 border-l border-slate-200 dark:border-slate-700 ${layoutMode === 'moodboard' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-600 dark:text-slate-300'}`}
+                        >
+                            <span className="flex items-center gap-1"><Layout size={12} /> Board</span>
                         </button>
                     </div>
                 </div>
 
-                {loadingSaved ? (
+                {layoutMode === 'moodboard' ? (
+                    <div className="relative min-h-[500px] h-[600px] bg-slate-50 dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 touch-none">
+                        <div 
+                            className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                            style={{ 
+                                backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)', 
+                                backgroundSize: '20px 20px',
+                                backgroundPosition: `${panelOffset.x}px ${panelOffset.y}px`
+                            }}
+                            onPointerDown={handleBoardPointerDown}
+                            onPointerMove={handleBoardPointerMove}
+                            onPointerUp={handleBoardPointerUp}
+                        />
+                        
+                        <div style={{ transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)` }}>
+                            {moodBoardPosts.map(config => {
+                                const post = userPosts.find(p => p.id === config.postId);
+                                if (!post) return null;
+                                
+                                if (activeFilter !== 'all' && !filteredPosts.find(p => p.id === post.id)) return null;
+
+                                return (
+                                    <DraggablePostCard
+                                        key={config.postId}
+                                        post={post}
+                                        config={config}
+                                        isOwner={currentUser?.uid === profile?.uid}
+                                        onUpdate={handlePostUpdate}
+                                        onInteract={() => {
+                                             const idx = filteredPosts.findIndex(p => p.id === post.id);
+                                             if (idx !== -1) openPostViewer(idx);
+                                        }}
+                                        maxZ={Math.max(...moodBoardPosts.map(p => p.zIndex), 0)}
+                                        onBringToFront={() => handleBringToFront(config.postId)}
+                                    />
+                                );
+                            })}
+                        </div>
+                        
+                        {currentUser?.uid === profile?.uid && (
+                            <div className="absolute top-4 right-4 z-10">
+                                <button
+                                    onClick={saveMoodBoard}
+                                    disabled={saveLoading}
+                                    className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                >
+                                    <Save size={14} /> Save Board
+                                </button>
+                            </div>
+                        )}
+
+                        {currentUser?.uid === profile?.uid && moodBoardPosts.length > 0 && !profile?.moodBoardConfig && (
+                            <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
+                                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-3 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+                                    <p className="font-bold text-sm">Mood Board Mode</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Drag posts to arrange. Tap star to feature.</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : loadingSaved ? (
                     <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
                         Loading saved posts...
                     </div>

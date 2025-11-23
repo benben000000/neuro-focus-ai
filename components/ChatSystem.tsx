@@ -13,9 +13,12 @@ import {
     UserProfile
 } from '../services/social';
 import { Send, Plus, Users, MessageCircle, Search, MoreVertical, Loader2, AlertCircle } from 'lucide-react';
+import { useVoiceChannel } from '../hooks/useVoiceChannel';
+import { VoiceChannelPanel } from './chat/VoiceChannelPanel';
 
 export function ChatSystem() {
     const { currentUser } = useAuth();
+    const voice = useVoiceChannel();
     const [chats, setChats] = useState<ChatRoom[]>([]);
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -208,6 +211,9 @@ export function ChatSystem() {
                                 <MoreVertical size={20} />
                             </button>
                         </div>
+
+                        {/* Voice Channel Panel */}
+                        <VoiceChannelPanel channelId={activeChatId} voice={voice} />
 
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">

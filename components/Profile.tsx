@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
+import { useActivity } from '../contexts/ActivityContext';
 import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, mergeMoodBoardLayout, MoodBoardLayout } from '../services/social';
-import { getProgress } from '../services/learning';
+import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Move } from 'lucide-react';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar } from 'lucide-react';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Move, Star } from 'lucide-react';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles } from 'lucide-react';
 import { CommentThread } from './CommentThread';
 
@@ -169,6 +167,7 @@ const LevelSummary = ({ level, xp }: { level: number; xp: number }) => {
 export function Profile() {
     const { currentUser } = useAuth();
     const { profile, loading: profileLoading, refreshProfile } = useProfile();
+    const { stats: progressSummary } = useActivity();
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [editBio, setEditBio] = useState('');
@@ -190,7 +189,6 @@ export function Profile() {
     const [layoutMode, setLayoutMode] = useState<'grid' | 'masonry' | 'moodboard'>('grid');
     const [activeFilter, setActiveFilter] = useState<'all' | 'study' | 'notes' | 'highlights' | 'saved'>('all');
     const [selectedPostIndex, setSelectedPostIndex] = useState<number | null>(null);
-    const [progressSummary, setProgressSummary] = useState<UserProgress | null>(null);
     const [viewerTouchStartX, setViewerTouchStartX] = useState<number | null>(null);
 
     // Mood Board State
@@ -374,15 +372,6 @@ export function Profile() {
         };
         loadSaved();
     }, [activeFilter, currentUser, profile?.savedPostIds]);
-
-    useEffect(() => {
-        try {
-            const progress = getProgress();
-            setProgressSummary(progress);
-        } catch (e) {
-            console.error('Failed to load study progress', e);
-        }
-    }, []);
 
     useEffect(() => {
         return () => {

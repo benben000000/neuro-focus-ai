@@ -4,11 +4,11 @@ import {
   LineChart, Line
 } from 'recharts';
 import { BookOpen, Brain, Trophy, Activity, Timer, ChevronRight } from 'lucide-react';
-import { FileAttachment, UserProgress } from '../types';
+import { FileAttachment } from '../types';
 import { identifyDocumentSubject } from '../services/gemini';
-import { getProgress } from '../services/learning';
 import { FileUploader } from './FileUploader';
-import { usePomodoro } from '../contexts/PomodoroContext';
+import { useActivity } from '../contexts/ActivityContext';
+import { formatTime } from '../services/learning';
 
 interface DashboardProps {
   attachments: FileAttachment[];
@@ -16,34 +16,9 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachments }) => {
-  const [progress, setProgress] = useState<UserProgress>(getProgress());
-  const [currentSubject, setCurrentSubject] = useState<string>('General Knowledge');
+  const { stats, isTracking, sessionDuration, currentSubject, setSubject } = useActivity();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [complexity, setComplexity] = useState(0);
-
-  const { 
-      isActive, 
-      timeLeft, 
-      mode, 
-      setSessionSubject, 
-      formatTime, 
-      toggleTimer,
-      setWidgetVisible
-  } = usePomodoro();
-
-  useEffect(() => {
-    // Refresh progress when session might have been logged or on mount
-    // Since progress is local state initialized from getProgress(), we need to update it.
-    // Ideally we would subscribe to changes or use a Context for progress too, but for now:
-    const interval = setInterval(() => {
-        const newProgress = getProgress();
-        if (JSON.stringify(newProgress) !== JSON.stringify(progress)) {
-            setProgress(newProgress);
-        }
-    }, 2000); // Poll for updates every 2s
-    
-    return () => clearInterval(interval);
-  }, [progress]);
 
   useEffect(() => {
     const analyzeContext = async () => {
@@ -51,30 +26,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
         setIsAnalyzing(true);
         const result = await identifyDocumentSubject(attachments);
         if (result) {
-          setCurrentSubject(result.subject);
+          setSubject(result.subject);
           setComplexity(result.complexity);
         }
         setIsAnalyzing(false);
       } else {
-        setCurrentSubject('General Knowledge');
+        setSubject('General Knowledge');
         setComplexity(0);
       }
     };
 
     analyzeContext();
-  }, [attachments.length]);
+  }, [attachments.length, setSubject]);
 
-  // Sync subject with Pomodoro context
-  useEffect(() => {
-      setSessionSubject(currentSubject);
-  }, [currentSubject, setSessionSubject]);
-
-  const getElapsedTime = () => {
-      const totalDuration = mode === 'work' ? 25 * 60 : (mode === 'shortBreak' ? 5 * 60 : 15 * 60);
-      return formatTime(totalDuration - timeLeft);
-  };
-
-  const activityData = progress.sessions.slice(0, 7).reverse().map((s, i) => ({
+  const activityData = stats.sessions.slice(0, 7).reverse().map((s, i) => ({
     name: `S${i + 1}`,
     duration: Math.round(s.durationSeconds / 60),
     subject: s.subject
@@ -114,56 +79,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
         </div>
       </div>
 
-      {/* Live Activity / Session Status Chip */}
-      {isActive && (
+      {/* Active Usage Indicator */}
+      {isTracking && (
           <div className="flex items-center justify-between bg-indigo-50 dark:bg-slate-800/50 border border-indigo-100 dark:border-slate-700 rounded-xl p-4 animate-in slide-in-from-top-2">
               <div className="flex items-center gap-3">
                   <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {mode === 'work' ? 'Focus session running' : 'Break time'}
+                      Active Learning
                   </span>
                   <span className="text-sm font-mono text-slate-500 dark:text-slate-400">
-                      • {getElapsedTime()} elapsed
+                      • {formatTime(sessionDuration)} active
                   </span>
-              </div>
-              <div className="flex items-center gap-3">
-                   <button 
-                      onClick={() => setWidgetVisible(true)}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
-                   >
-                      Show Timer
-                   </button>
               </div>
           </div>
       )}
       
-      {!isActive && (
-         <div className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center justify-between">
-             <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500">
-                    <Timer size={16} />
-                </div>
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Ready to focus?</span>
-             </div>
-             <button 
-                onClick={() => {
-                    setWidgetVisible(true);
-                    toggleTimer();
-                }}
-                className="text-sm font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
-             >
-                Start Session
-             </button>
-         </div>
+      {!isTracking && (
+          <div className="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4 flex items-center justify-between text-slate-500 text-sm">
+             <span>Start interacting to track your progress automatically.</span>
+          </div>
       )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Complexity', value: complexity > 0 ? complexity : '-', icon: Activity, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
-          { label: 'Retention', value: `${progress.averageRetentionRate}%`, icon: Brain, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-          { label: 'Sessions', value: progress.totalSessions, icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-          { label: 'Streak', value: progress.streakDays, icon: Trophy, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+          { label: 'Retention', value: `${stats.averageRetentionRate}%`, icon: Brain, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+          { label: 'Focus Time', value: `${(stats.totalStudySeconds / 3600).toFixed(1)}h`, icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+          { label: 'Streak', value: stats.streakDays, icon: Trophy, color: 'text-amber-500', bg: 'bg-amber-500/10' },
         ].map((stat, i) => (
           <div key={i} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col items-center text-center hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
             <div className={`p-2 rounded-full mb-2 ${stat.bg} ${stat.color}`}>

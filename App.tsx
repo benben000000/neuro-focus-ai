@@ -11,14 +11,13 @@ import { LiveVoiceTutor } from './components/LiveVoiceTutor';
 import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProfileProvider, useProfile } from './contexts/ProfileContext';
-import { PomodoroProvider } from './contexts/PomodoroContext';
+import { ActivityProvider } from './contexts/ActivityContext';
 import { FileAttachment } from './types';
 import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
 import { LanguageLab } from './components/LanguageLab';
 import { useSecurity } from './hooks/useSecurity';
-import { LanguageLab } from './components/LanguageLab';
 
 // Private Route Wrapper
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -114,7 +113,6 @@ function AppContent() {
               onStartVoice={() => setIsVoiceMode(true)}
             />
           } />
-          <Route path="language" element={<LanguageLab />} />
           <Route path="profile" element={<Profile />} />
           <Route path="community" element={<SocialFeed />} />
           <Route path="chat" element={<ChatSystem />} />
@@ -135,9 +133,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ProfileProvider>
-          <PomodoroProvider>
+          <ActivityProvider>
             <AppContent />
-          </PomodoroProvider>
+          </ActivityProvider>
         </ProfileProvider>
       </AuthProvider>
     </BrowserRouter>

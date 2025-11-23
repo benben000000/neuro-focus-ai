@@ -20,12 +20,12 @@ import { LiveVoiceTutor } from './LiveVoiceTutor';
 import { MajorExamMode } from './MajorExamMode';
 import { LanguageLab } from './LanguageLab';
 import { playClick, playSuccess, playError } from '../services/sound';
+import { useActivity } from '../contexts/ActivityContext';
 
 interface StudyToolsProps {
     attachments: FileAttachment[];
     setAttachments: React.Dispatch<React.SetStateAction<FileAttachment[]>>;
     onStartVoice: () => void;
-    isSessionActive: boolean; // New Prop
 }
 
 // --- UTILS ---
@@ -175,10 +175,32 @@ const ToolCard: React.FC<ToolCardProps> = ({ title, desc, icon, color, onClick }
     );
 };
 
-export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachments, onStartVoice, isSessionActive }) => {
+export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachments, onStartVoice }) => {
+    const { setSubject, isTracking } = useActivity();
     const [mode, setMode] = useState<ToolMode>('MENU');
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
+
+    useEffect(() => {
+        const map: Record<string, string> = {
+            MENU: 'Study Tools',
+            FLASHCARDS: 'Flashcards',
+            QUIZ: 'AI Quiz',
+            BLURTING: 'Blurting',
+            FEYNMAN: 'Feynman Technique',
+            MINDMAP: 'Mind Mapping',
+            CLOZE: 'Cloze Deletion',
+            DEEP_DIVE: 'Deep Dive',
+            EQUATION: 'Problem Solving',
+            MEMORIZATION: 'Memorization',
+            IDENTIFICATION: 'Identification',
+            PEER_TEACHING: 'Peer Teaching',
+            VIDEO_EXPLAINER: 'Video Explainer',
+            MAJOR_EXAM: 'Major Exam',
+            LANGUAGE_LAB: 'Language Lab'
+        };
+        setSubject(map[mode] || 'Study Tools');
+    }, [mode, setSubject]);
 
     // Tool States
     const [cards, setCards] = useState<Flashcard[]>([]);
@@ -375,7 +397,7 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
     if (mode === 'MENU') return (
         <div className="max-w-6xl mx-auto p-6 space-y-10 animate-fade-in">
             <div className="text-center space-y-2"><h1 className="text-3xl font-bold text-slate-900 dark:text-white">Study Lab</h1><p className="text-slate-600 dark:text-slate-400">Select a science-backed method to master your material.</p></div>
-            {isSessionActive && <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 rounded-lg text-center text-green-700 dark:text-green-400 text-sm font-medium mb-4">Session Active: Recording progress...</div>}
+            {isTracking && <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-3 rounded-lg text-center text-green-700 dark:text-green-400 text-sm font-medium mb-4">Session Active: Recording progress...</div>}
             <div className="bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-900 rounded-xl p-6 flex flex-wrap gap-3 items-center"> <div className="flex items-center gap-2 mr-4"><Layers size={18} className="text-indigo-600 dark:text-indigo-400" /><span className="font-semibold text-indigo-900 dark:text-indigo-100">Context:</span></div> {attachments.map((f, i) => (<div key={i} className="bg-white dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2"><span className="truncate max-w-[120px]">{f.name}</span><button onClick={() => removeFile(i)} className="hover:text-red-500"><X size={14} /></button></div>))} <div className="w-32"><FileUploader onFilesSelected={fs => setAttachments(p => [...p, ...fs])} compact /></div> </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <ToolCard title="Flashcards" desc="Spaced repetition basics." icon={<Layers />} color="orange" onClick={launchFlashcards} />

@@ -6,8 +6,9 @@ import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchS
 import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move, Loader } from 'lucide-react';
 import { CommentThread } from './CommentThread';
+import { Toggle } from './ui/Toggle';
 
 interface DraggablePostCardProps {
     post: SocialPost;
@@ -313,6 +314,7 @@ export function Profile() {
     const [adminSearchTerm, setAdminSearchTerm] = useState('');
     const [adminSearchResults, setAdminSearchResults] = useState<UserProfile[]>([]);
     const [adminLoading, setAdminLoading] = useState(false);
+    const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
     const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -662,7 +664,8 @@ export function Profile() {
     const handleToggleVerify = async (targetUser: UserProfile) => {
         if (!currentUser || !currentUser.email) return;
         if (!window.confirm(`Are you sure you want to ${targetUser.isVerified ? 'remove' : 'add'} verification for ${targetUser.displayName}?`)) return;
-        
+
+        setUpdatingUserId(targetUser.uid);
         try {
             await setVerifiedBadge(targetUser.uid, !targetUser.isVerified, currentUser.email);
             // Refresh search results
@@ -672,6 +675,8 @@ export function Profile() {
         } catch (e) {
             console.error(e);
             showErrorMessage('Failed to update verification.');
+        } finally {
+            setUpdatingUserId(null);
         }
     };
 
@@ -880,7 +885,7 @@ export function Profile() {
                                                 </div>
                                             )}
                                         </div>
-                                        <div>
+                                        <div className="flex-1">
                                             <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1">
                                                 {user.displayName}
                                                 {user.isVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
@@ -888,16 +893,22 @@ export function Profile() {
                                             <p className="text-xs text-slate-500">{user.email}</p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleToggleVerify(user)}
-                                        className={`px-3 py-1 rounded-md text-xs font-bold ${
-                                            user.isVerified 
-                                                ? 'bg-red-100 text-red-600 hover:bg-red-200' 
-                                                : 'bg-green-100 text-green-600 hover:bg-green-200'
-                                        }`}
-                                    >
-                                        {user.isVerified ? 'Revoke Badge' : 'Grant Badge'}
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        {updatingUserId === user.uid && (
+                                            <div className="flex items-center justify-center">
+                                                <Loader size={16} className="text-indigo-600 dark:text-indigo-400 animate-spin" />
+                                            </div>
+                                        )}
+                                        {updatingUserId !== user.uid && (
+                                            <Toggle
+                                                checked={user.isVerified || false}
+                                                disabled={updatingUserId !== null}
+                                                onChange={() => handleToggleVerify(user)}
+                                                label={user.isVerified ? 'Verified' : 'Not Verified'}
+                                                className="ml-2"
+                                            />
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>

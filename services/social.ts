@@ -113,6 +113,11 @@ export interface SocialPost {
     // New rich media array for carousels
     media?: ComposerMedia[];
     location?: string; // Optional location tag
+    listeningTo?: {
+        title: string;
+        artist?: string;
+        source?: string;
+    };
     type: 'status' | 'progress';
     // Optional semantic metadata used for profile filters & overlays
     category?: 'study' | 'notes' | 'highlights' | 'other';
@@ -386,6 +391,19 @@ export const deletePost = async (postId: string) => {
     }
 };
 
+export const updatePost = async (
+    postId: string,
+    updates: Partial<Omit<SocialPost, 'id' | 'authorId' | 'authorName' | 'authorPhoto' | 'authorIsVerified' | 'likes' | 'likedBy' | 'commentsCount' | 'createdAt'>>
+) => {
+    try {
+        const postRef = doc(db, 'posts', postId);
+        await updateDoc(postRef, updates);
+    } catch (error: any) {
+        console.error('updatePost failed', error);
+        throw new Error(error?.message || 'Failed to update post.');
+    }
+};
+
 export const toggleLike = async (postId: string, userId: string) => {
     const postRef = doc(db, 'posts', postId);
     const postSnap = await getDoc(postRef);
@@ -537,6 +555,21 @@ export const fetchSavedPosts = async (userId: string) => {
             id: snap.id,
             ...snap.data()
         } as SocialPost));
+};
+
+export const reportPost = async (postId: string, reporterId: string, reason?: string) => {
+    try {
+        const reportsRef = collection(db, 'reports');
+        await addDoc(reportsRef, {
+            postId,
+            reporterId,
+            reason: reason || '',
+            createdAt: Date.now()
+        });
+    } catch (error: any) {
+        console.error('reportPost failed', error);
+        throw new Error(error?.message || 'Failed to report post.');
+    }
 };
 
 // --- SHARING FUNCTIONS ---

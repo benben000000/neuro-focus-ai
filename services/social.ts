@@ -58,7 +58,10 @@ export interface MoodBoardLayout {
 export interface UserProfile {
     uid: string;
     displayName: string;
+    displayNameLower?: string; // for case-insensitive search
     email: string;
+    username?: string; // unique username
+    usernameLower?: string; // for case-insensitive search
     photoURL?: string;
     bio?: string;
     birthday?: string;
@@ -202,10 +205,14 @@ export const createUserProfile = async (user: any) => {
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
+        const displayName = user.displayName || 'Student';
         const newProfile: UserProfile = {
             uid: user.uid,
-            displayName: user.displayName || 'Student',
+            displayName: displayName,
+            displayNameLower: displayName.toLowerCase(),
             email: user.email,
+            username: '',
+            usernameLower: '',
             photoURL: user.photoURL || '',
             bio: 'Ready to learn!',
             birthday: '',
@@ -238,21 +245,31 @@ export const getUserProfile = async (uid: string) => {
 
 export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
     const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, data);
+    
+    // Ensure lowercase fields are set for search
+    const updateData = { ...data };
+    if (data.displayName) {
+        updateData.displayNameLower = data.displayName.toLowerCase();
+    }
+    if (data.username) {
+        updateData.usernameLower = data.username.toLowerCase();
+    }
+    
+    await updateDoc(userRef, updateData);
     
     // Also update Firebase Auth profile
     const currentUser = auth.currentUser;
     if (currentUser) {
-        const updateData: any = {};
+        const authUpdateData: any = {};
         if (data.displayName) {
-            updateData.displayName = data.displayName;
+            authUpdateData.displayName = data.displayName;
         }
         if (data.photoURL !== undefined) {
-            updateData.photoURL = data.photoURL;
+            authUpdateData.photoURL = data.photoURL;
         }
         
-        if (Object.keys(updateData).length > 0) {
-            await updateProfile(currentUser, updateData);
+        if (Object.keys(authUpdateData).length > 0) {
+            await updateProfile(currentUser, authUpdateData);
         }
     }
 };
@@ -929,6 +946,7 @@ export const setVerifiedBadge = async (targetUserId: string, isVerified: boolean
 
 export const searchUsers = async (searchTerm: string) => {
     const usersRef = collection(db, 'users');
+    const lowerSearchTerm = searchTerm.toLowerCase();
     
     // Try to find by email first
     const qEmail = query(usersRef, where('email', '==', searchTerm));
@@ -938,16 +956,50 @@ export const searchUsers = async (searchTerm: string) => {
         return emailSnap.docs.map(d => d.data() as UserProfile);
     }
 
-    // Prefix search for displayName
-    const qName = query(usersRef, 
-        orderBy('displayName'), 
-        where('displayName', '>=', searchTerm), 
-        where('displayName', '<=', searchTerm + '\uf8ff'),
-        limit(10)
-    );
-    
-    const nameSnap = await getDocs(qName);
-    return nameSnap.docs.map(d => d.data() as UserProfile);
+    try {
+        // Prefix search for displayNameLower
+        const qName = query(usersRef, 
+            orderBy('displayNameLower'), 
+            where('displayNameLower', '>=', lowerSearchTerm), 
+            where('displayNameLower', '<=', lowerSearchTerm + '\uf8ff'),
+            limit(10)
+        );
+        
+        const nameSnap = await getDocs(qName);
+        let results = nameSnap.docs.map(d => d.data() as UserProfile);
+        
+        // Also try username search if no results or not many results
+        if (results.length < 10) {
+            const qUsername = query(usersRef, 
+                orderBy('usernameLower'), 
+                where('usernameLower', '>=', lowerSearchTerm), 
+                where('usernameLower', '<=', lowerSearchTerm + '\uf8ff'),
+                limit(10)
+            );
+            
+            const usernameSnap = await getDocs(qUsername);
+            const usernameResults = usernameSnap.docs.map(d => d.data() as UserProfile);
+            
+            // Merge and deduplicate results
+            const resultMap = new Map<string, UserProfile>();
+            results.forEach(r => resultMap.set(r.uid, r));
+            usernameResults.forEach(r => resultMap.set(r.uid, r));
+            results = Array.from(resultMap.values()).slice(0, 10);
+        }
+        
+        return results;
+    } catch (error: any) {
+        // Fallback to client-side filtering if Firestore range queries fail
+        console.log('Firestore range query failed, falling back to client-side filtering:', error);
+        const allUsersSnap = await getDocs(usersRef);
+        const allUsers = allUsersSnap.docs.map(d => d.data() as UserProfile);
+        
+        return allUsers.filter(user => {
+            const displayNameLower = user.displayNameLower || user.displayName?.toLowerCase() || '';
+            const usernameLower = user.usernameLower || user.username?.toLowerCase() || '';
+            return displayNameLower.includes(lowerSearchTerm) || usernameLower.includes(lowerSearchTerm);
+        }).slice(0, 10);
+    }
 };
 
 // --- VOICE CHANNEL FUNCTIONS ---

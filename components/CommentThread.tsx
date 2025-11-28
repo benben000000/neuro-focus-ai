@@ -3,6 +3,7 @@ import { SocialComment, addComment, deleteComment, subscribeToComments, toggleCo
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { Send, Trash2, X, Smile } from 'lucide-react';
+import { ProfilePreviewTrigger } from './ui/ProfilePreviewTrigger';
 
 interface CommentThreadProps {
     parentId: string;
@@ -143,20 +144,24 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentTy
                 ) : (
                     comments.map(comment => (
                         <div key={comment.id} className="flex gap-3 group">
-                            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex-shrink-0">
-                                {comment.authorPhoto ? (
-                                    <img src={comment.authorPhoto} className="w-full h-full object-cover" alt={comment.authorName} />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                        {comment.authorName?.[0] || 'A'}
-                                    </div>
-                                )}
-                            </div>
+                            <ProfilePreviewTrigger userId={comment.authorId} disabled={!comment.authorId}>
+                                <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex-shrink-0 cursor-pointer">
+                                    {comment.authorPhoto ? (
+                                        <img src={comment.authorPhoto} className="w-full h-full object-cover" alt={comment.authorName} />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
+                                            {comment.authorName?.[0] || 'A'}
+                                        </div>
+                                    )}
+                                </div>
+                            </ProfilePreviewTrigger>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline gap-2">
-                                    <span className="font-bold text-sm text-slate-900 dark:text-white truncate">
-                                        {comment.authorName || 'Anonymous'}
-                                    </span>
+                                    <ProfilePreviewTrigger userId={comment.authorId} disabled={!comment.authorId}>
+                                        <span className="font-bold text-sm text-slate-900 dark:text-white truncate hover:underline cursor-pointer">
+                                            {comment.authorName || 'Anonymous'}
+                                        </span>
+                                    </ProfilePreviewTrigger>
                                     <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(comment.createdAt)}</span>
                                 </div>
                                 <p className="text-sm text-slate-700 dark:text-slate-300 break-words leading-relaxed">{comment.content}</p>

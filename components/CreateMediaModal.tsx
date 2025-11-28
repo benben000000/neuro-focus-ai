@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Image as ImageIcon, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { createPost, createStory, getUserProfile, SocialPost, ComposerMedia } from '../services/social';
+import { createPost, createStory, getUserProfile, SocialPost, ComposerMedia, updatePost } from '../services/social';
 import { MediaCarousel } from './MediaCarousel';
 
 interface CreateMediaModalProps {
@@ -9,12 +9,17 @@ interface CreateMediaModalProps {
     onClose: () => void;
     type: 'post' | 'story'; // Default mode
     onPostCreated?: (post: SocialPost) => void;
+    onPostUpdated?: (post: SocialPost) => void;
+    editingPost?: SocialPost | null;
 }
 
-export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCreated }: CreateMediaModalProps) {
+export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCreated, onPostUpdated, editingPost }: CreateMediaModalProps) {
     const { currentUser } = useAuth();
     const [mode, setMode] = useState<'post' | 'story'>(initialType);
     const [content, setContent] = useState('');
+    const [location, setLocation] = useState('');
+    const [listeningToTitle, setListeningToTitle] = useState('');
+    const [listeningToArtist, setListeningToArtist] = useState('');
     const [media, setMedia] = useState<ComposerMedia[]>([]);
     const [activeIndex, setActiveIndex] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -22,6 +27,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dragIndexRef = useRef<number | null>(null);
+    const isEditingMode = !!editingPost;
 
     // Sync mode state with type prop whenever modal opens
     useEffect(() => {
@@ -29,8 +35,24 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             setMode(initialType);
             setError(null);
             setValidationErrors([]);
+            
+            if (editingPost) {
+                setContent(editingPost.content);
+                setLocation(editingPost.location || '');
+                setListeningToTitle(editingPost.listeningTo?.title || '');
+                setListeningToArtist(editingPost.listeningTo?.artist || '');
+                setMedia(editingPost.media || []);
+                setActiveIndex(0);
+            } else {
+                setContent('');
+                setLocation('');
+                setListeningToTitle('');
+                setListeningToArtist('');
+                setMedia([]);
+                setActiveIndex(0);
+            }
         }
-    }, [isOpen, initialType]);
+    }, [isOpen, initialType, editingPost]);
 
     // Lock body scroll when modal is open
     useEffect(() => {
@@ -171,6 +193,11 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
 
             const mediaPayload = media.length ? media : undefined;
             const primaryMediaUrl = mediaPayload && mediaPayload.length > 0 ? mediaPayload[0].url : undefined;
+            
+            const listeningToPayload = listeningToTitle.trim() ? {
+                title: listeningToTitle.trim(),
+                artist: listeningToArtist.trim() || undefined
+            } : undefined;
 
             if (mode === 'story' && mediaPayload) {
                 await createStory({
@@ -184,25 +211,50 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                     content: content.trim(),
                     media: mediaPayload,
                     mediaUrl: primaryMediaUrl,
+                    location: location.trim() || undefined,
+                    listeningTo: listeningToPayload,
                     type: 'status' as const
                 };
-                const docId = await createPost(postData);
-                const now = Date.now();
-
-                // Optimistically add to feed if callback provided
-                if (onPostCreated) {
-                    onPostCreated({
-                        id: docId,
-                        ...postData,
-                        likes: 0,
-                        likedBy: [],
-                        commentsCount: 0,
-                        createdAt: now
+                
+                if (isEditingMode && editingPost) {
+                    // Update existing post
+                    await updatePost(editingPost.id, {
+                        content: postData.content,
+                        media: postData.media,
+                        mediaUrl: postData.mediaUrl,
+                        location: postData.location,
+                        listeningTo: postData.listeningTo
                     });
+                    
+                    if (onPostUpdated) {
+                        onPostUpdated({
+                            ...editingPost,
+                            ...postData
+                        });
+                    }
+                } else {
+                    // Create new post
+                    const docId = await createPost(postData);
+                    const now = Date.now();
+
+                    // Optimistically add to feed if callback provided
+                    if (onPostCreated) {
+                        onPostCreated({
+                            id: docId,
+                            ...postData,
+                            likes: 0,
+                            likedBy: [],
+                            commentsCount: 0,
+                            createdAt: now
+                        });
+                    }
                 }
             }
             onClose();
             setContent('');
+            setLocation('');
+            setListeningToTitle('');
+            setListeningToArtist('');
             setMedia([]);
             setActiveIndex(0);
             setValidationErrors([]);
@@ -219,7 +271,9 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[min(90vh,720px)]">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <h2 className="font-bold text-lg text-slate-900 dark:text-white">Create New</h2>
+                    <h2 className="font-bold text-lg text-slate-900 dark:text-white">
+                        {isEditingMode ? 'Edit Post' : 'Create New'}
+                    </h2>
                     <button onClick={onClose} className="text-slate-500 hover:text-slate-900 dark:hover:text-white">
                         <X size={24} />
                     </button>
@@ -355,12 +409,43 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
 
                     {/* Caption (Post only) */}
                     {mode === 'post' && (
-                        <textarea
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            placeholder="Write a caption..."
-                            className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24"
-                        />
+                        <>
+                            <textarea
+                                value={content}
+                                onChange={(e) => setContent(e.target.value)}
+                                placeholder="Write a caption..."
+                                className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24"
+                            />
+
+                            {/* Location */}
+                            <input
+                                type="text"
+                                value={location}
+                                onChange={(e) => setLocation(e.target.value)}
+                                placeholder="📍 Add location (optional)"
+                                className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            />
+
+                            {/* Listening To */}
+                            <div className="space-y-2">
+                                <input
+                                    type="text"
+                                    value={listeningToTitle}
+                                    onChange={(e) => setListeningToTitle(e.target.value)}
+                                    placeholder="🎧 Now listening to... (optional)"
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                />
+                                {listeningToTitle && (
+                                    <input
+                                        type="text"
+                                        value={listeningToArtist}
+                                        onChange={(e) => setListeningToArtist(e.target.value)}
+                                        placeholder="Artist name (optional)"
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    />
+                                )}
+                            </div>
+                        </>
                     )}
                 </div>
 

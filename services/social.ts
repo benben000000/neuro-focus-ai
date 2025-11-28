@@ -387,6 +387,19 @@ export const deletePost = async (postId: string) => {
     }
 };
 
+export const updatePost = async (
+    postId: string,
+    updates: Partial<Omit<SocialPost, 'id' | 'authorId' | 'authorName' | 'authorPhoto' | 'authorIsVerified' | 'likes' | 'likedBy' | 'commentsCount' | 'createdAt'>>
+) => {
+    try {
+        const postRef = doc(db, 'posts', postId);
+        await updateDoc(postRef, updates);
+    } catch (error: any) {
+        console.error('updatePost failed', error);
+        throw new Error(error?.message || 'Failed to update post.');
+    }
+};
+
 export const toggleLike = async (postId: string, userId: string) => {
     const postRef = doc(db, 'posts', postId);
     const postSnap = await getDoc(postRef);

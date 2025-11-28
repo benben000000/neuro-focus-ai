@@ -55,6 +55,11 @@ export interface MoodBoardLayout {
     updatedAt: number;
 }
 
+export interface BoardStyle {
+    backgroundColor?: string; // hex color
+    backgroundTexture?: 'none' | 'paper' | 'gradient' | 'dotted';
+    showGrid?: boolean;
+    noiseLevel?: number; // 0-100
 // Mood board item with transforms and sticker support
 export type MoodBoardItemKind = 'post' | 'sticker';
 
@@ -103,6 +108,7 @@ export interface UserProfile {
     moodBoardConfig?: {
         posts: MoodBoardItem[];
         panelOffset?: { x: number; y: number };
+        boardStyle?: BoardStyle;
     };
 }
 
@@ -1277,3 +1283,35 @@ export const inviteToVoiceChannel = async (sender: UserProfile, targetUserId: st
     });
 };
 
+// --- BOARD STYLING FUNCTIONS ---
+
+export const getDefaultBoardStyle = (): BoardStyle => ({
+    backgroundColor: '#f8fafc',
+    backgroundTexture: 'none',
+    showGrid: true,
+    noiseLevel: 0
+});
+
+export const generateTexturePattern = (
+    texture: BoardStyle['backgroundTexture'],
+    isDarkMode: boolean
+): string => {
+    const lightGrid = 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)';
+    const darkGrid = 'radial-gradient(circle, #64748b 1px, transparent 1px)';
+    
+    switch (texture) {
+        case 'paper':
+            return isDarkMode
+                ? 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.05) 2px, rgba(255,255,255,.05) 4px)'
+                : 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.02) 2px, rgba(0,0,0,.02) 4px)';
+        case 'dotted':
+            return isDarkMode ? darkGrid : lightGrid;
+        case 'gradient':
+            return isDarkMode
+                ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
+                : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
+        case 'none':
+        default:
+            return 'transparent';
+    }
+};

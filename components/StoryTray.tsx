@@ -5,6 +5,7 @@ import { Plus, X, ChevronLeft, ChevronRight, Share2, MessageCircle, BadgeCheck }
 import { MediaCarousel } from './MediaCarousel';
 import { ShareModal } from './ShareModal';
 import { CommentThread } from './CommentThread';
+import { ProfilePreviewTrigger } from './ui/ProfilePreviewTrigger';
 
 const StoryTrayPresence = ({ userId }: { userId: string }) => {
     const [presence, setPresence] = useState<UserPresence | null>(null);
@@ -126,26 +127,28 @@ export function StoryTray({ onCreateStory }: StoryTrayProps) {
 
                     {/* Other Users' Stories */}
                     {Object.entries(groupedStories).map(([authorId, userStories]) => {
-                        if (authorId === currentUser?.uid) return null; // Skip own story in list for now
-                        const story = userStories[0]; // Show latest or first
-                        return (
-                            <div key={authorId} className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
-                                <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600 relative">
-                                    <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white dark:bg-slate-800">
-                                        {story.authorPhoto ? (
-                                            <img src={story.authorPhoto} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center font-bold text-slate-400">
-                                                {story.authorName[0]}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <StoryTrayPresence userId={authorId} />
-                                </div>
-                                <span className="text-xs font-medium text-slate-900 dark:text-white max-w-[70px] truncate">{story.authorName}</span>
-                            </div>
-                        );
-                    })}
+                         if (authorId === currentUser?.uid) return null; // Skip own story in list for now
+                         const story = userStories[0]; // Show latest or first
+                         return (
+                             <ProfilePreviewTrigger key={authorId} userId={authorId}>
+                                 <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => handleViewStory(authorId)}>
+                                     <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-yellow-400 to-fuchsia-600 relative">
+                                         <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white dark:bg-slate-800">
+                                             {story.authorPhoto ? (
+                                                 <img src={story.authorPhoto} className="w-full h-full object-cover" alt={story.authorName} />
+                                             ) : (
+                                                 <div className="w-full h-full flex items-center justify-center font-bold text-slate-400">
+                                                     {story.authorName[0]}
+                                                 </div>
+                                             )}
+                                         </div>
+                                         <StoryTrayPresence userId={authorId} />
+                                     </div>
+                                     <span className="text-xs font-medium text-slate-900 dark:text-white max-w-[70px] truncate">{story.authorName}</span>
+                                 </div>
+                             </ProfilePreviewTrigger>
+                         );
+                     })}
                 </div>
             </div>
 

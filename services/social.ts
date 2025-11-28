@@ -55,10 +55,39 @@ export interface MoodBoardLayout {
     updatedAt: number;
 }
 
+export interface BoardStyle {
+    backgroundColor?: string; // hex color
+    backgroundTexture?: 'none' | 'paper' | 'gradient' | 'dotted';
+    showGrid?: boolean;
+    noiseLevel?: number; // 0-100
+}
+
+// Mood board item with transforms and sticker support
+export type MoodBoardItemKind = 'post' | 'sticker';
+
+export interface MoodBoardItem {
+    id: string; // postId for posts, generated id for stickers
+    kind: MoodBoardItemKind;
+    postId?: string; // Only for kind='post'
+    // Sticker-specific fields
+    assetUrl?: string; // URL or data URL for sticker image
+    alt?: string; // Fallback description for sticker
+    // Transform fields
+    x: number;
+    y: number;
+    rotation: number; // degrees, -30 to 30
+    scale: number; // 0.5 to 2
+    zIndex: number;
+    isFeatured?: boolean;
+}
+
 export interface UserProfile {
     uid: string;
     displayName: string;
+    displayNameLower?: string; // for case-insensitive search
     email: string;
+    username?: string; // unique username
+    usernameLower?: string; // for case-insensitive search
     photoURL?: string;
     bio?: string;
     birthday?: string;
@@ -79,16 +108,9 @@ export interface UserProfile {
     hasCompletedOnboarding?: boolean;
     moodBoardLayout?: MoodBoardLayout;
     moodBoardConfig?: {
-        posts: {
-            postId: string;
-            x: number;
-            y: number;
-            rotation: number;
-            scale: number;
-            zIndex: number;
-            isFeatured?: boolean;
-        }[];
+        posts: MoodBoardItem[];
         panelOffset?: { x: number; y: number };
+        boardStyle?: BoardStyle;
     };
 }
 
@@ -143,14 +165,22 @@ export interface SocialComment {
     authorIsVerified?: boolean;
     content: string;
     createdAt: number;
+    reactions?: Record<string, string[]>; // emoji -> array of user IDs
 }
 
 export interface ChatMessage {
     id: string;
     senderId: string;
     senderName: string;
+    senderPhoto?: string;
     content: string;
     createdAt: number;
+    reactions?: Record<string, string[]>; // emoji -> array of user IDs
+    editedAt?: number;
+    deletedAt?: number;
+    isDeleted?: boolean;
+    pinned?: boolean;
+    readBy?: string[]; // List of user IDs who have read this message
 }
 
 export interface Story {
@@ -206,10 +236,14 @@ export const createUserProfile = async (user: any) => {
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
+        const displayName = user.displayName || 'Student';
         const newProfile: UserProfile = {
             uid: user.uid,
-            displayName: user.displayName || 'Student',
+            displayName: displayName,
+            displayNameLower: displayName.toLowerCase(),
             email: user.email,
+            username: '',
+            usernameLower: '',
             photoURL: user.photoURL || '',
             bio: 'Ready to learn!',
             birthday: '',
@@ -242,21 +276,31 @@ export const getUserProfile = async (uid: string) => {
 
 export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
     const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, data);
+    
+    // Ensure lowercase fields are set for search
+    const updateData = { ...data };
+    if (data.displayName) {
+        updateData.displayNameLower = data.displayName.toLowerCase();
+    }
+    if (data.username) {
+        updateData.usernameLower = data.username.toLowerCase();
+    }
+    
+    await updateDoc(userRef, updateData);
     
     // Also update Firebase Auth profile
     const currentUser = auth.currentUser;
     if (currentUser) {
-        const updateData: any = {};
+        const authUpdateData: any = {};
         if (data.displayName) {
-            updateData.displayName = data.displayName;
+            authUpdateData.displayName = data.displayName;
         }
         if (data.photoURL !== undefined) {
-            updateData.photoURL = data.photoURL;
+            authUpdateData.photoURL = data.photoURL;
         }
         
-        if (Object.keys(updateData).length > 0) {
-            await updateProfile(currentUser, updateData);
+        if (Object.keys(authUpdateData).length > 0) {
+            await updateProfile(currentUser, authUpdateData);
         }
     }
 };
@@ -441,7 +485,8 @@ export const addComment = async (
             authorPhoto: user.photoURL || '',
             authorIsVerified: user.isVerified || false,
             content: text,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            reactions: {}
         });
 
         const parentRef = doc(db, collectionName, parentId);
@@ -470,6 +515,47 @@ export const deleteComment = async (
     } catch (error: any) {
         console.error('deleteComment failed', error);
         throw new Error(error?.message || 'Failed to delete comment.');
+    }
+};
+
+export const toggleCommentReaction = async (
+    parentId: string,
+    collectionName: 'posts' | 'stories',
+    commentId: string,
+    emoji: string,
+    userId: string
+) => {
+    try {
+        const commentRef = doc(db, collectionName, parentId, 'comments', commentId);
+        
+        await runTransaction(db, async (transaction) => {
+            const commentSnap = await transaction.get(commentRef);
+            if (!commentSnap.exists()) {
+                throw new Error('Comment not found');
+            }
+            
+            const comment = commentSnap.data() as SocialComment;
+            const reactions = comment.reactions || {};
+            const emojiReactors = reactions[emoji] || [];
+            
+            if (emojiReactors.includes(userId)) {
+                // Remove reaction
+                const updatedReactors = emojiReactors.filter(id => id !== userId);
+                if (updatedReactors.length === 0) {
+                    delete reactions[emoji];
+                } else {
+                    reactions[emoji] = updatedReactors;
+                }
+            } else {
+                // Add reaction
+                reactions[emoji] = [...emojiReactors, userId];
+            }
+            
+            transaction.update(commentRef, { reactions });
+        });
+    } catch (error: any) {
+        console.error('toggleCommentReaction failed', error);
+        throw new Error(error?.message || 'Failed to toggle reaction.');
     }
 };
 
@@ -754,6 +840,137 @@ export const subscribeToUserChats = (userId: string, callback: (chats: ChatRoom[
     });
 };
 
+export const editChatMessage = async (chatId: string, messageId: string, newContent: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, {
+        content: newContent,
+        editedAt: Date.now()
+    });
+};
+
+export const deleteChatMessage = async (chatId: string, messageId: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, {
+        isDeleted: true,
+        deletedAt: Date.now(),
+        content: '[message removed]'
+    });
+};
+
+export const toggleChatReaction = async (chatId: string, messageId: string, emoji: string, userId: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    
+    await runTransaction(db, async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists()) return;
+        
+        const message = messageDoc.data() as ChatMessage;
+        const reactions = message.reactions || {};
+        const emojiReactors = reactions[emoji] || [];
+        
+        if (emojiReactors.includes(userId)) {
+            // Remove reaction
+            const updatedReactors = emojiReactors.filter(id => id !== userId);
+            if (updatedReactors.length === 0) {
+                delete reactions[emoji];
+            } else {
+                reactions[emoji] = updatedReactors;
+            }
+        } else {
+            // Add reaction
+            reactions[emoji] = [...emojiReactors, userId];
+        }
+        
+        transaction.update(messageRef, { reactions });
+    });
+};
+
+export const pinChatMessage = async (chatId: string, messageId: string, shouldPin: boolean): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, { pinned: shouldPin });
+};
+
+export const setChatReadReceipt = async (chatId: string, messageId: string, userId: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    
+    await runTransaction(db, async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists()) return;
+        
+        const message = messageDoc.data() as ChatMessage;
+        const readBy = message.readBy || [];
+        
+        if (!readBy.includes(userId)) {
+            transaction.update(messageRef, { readBy: [...readBy, userId] });
+        }
+    });
+};
+
+export const setChatTypingState = async (chatId: string, userId: string, isTyping: boolean): Promise<void> => {
+    const typingRef = doc(db, 'chats', chatId, 'typingStates', userId);
+    if (isTyping) {
+        await setDoc(typingRef, {
+            userId,
+            timestamp: Date.now()
+        });
+    } else {
+        await deleteDoc(typingRef).catch(() => {/* ignore if not exists */});
+    }
+};
+
+export const subscribeToChatTypingStates = (chatId: string, callback: (typingUsers: string[]) => void): (() => void) => {
+    const typingRef = collection(db, 'chats', chatId, 'typingStates');
+    const now = Date.now();
+    const timeout = 3000; // 3 seconds
+
+    return onSnapshot(typingRef, (snapshot) => {
+        const typingUsers = snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    userId: data.userId,
+                    timestamp: data.timestamp
+                };
+            })
+            .filter(user => now - user.timestamp < timeout)
+            .map(user => user.userId);
+        
+        callback(typingUsers);
+    });
+};
+
+export const searchChatMessages = async (chatId: string, searchTerm: string, limit: number = 20): Promise<ChatMessage[]> => {
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    
+    try {
+        const q = query(
+            messagesRef,
+            where('content', '>=', searchTerm),
+            where('content', '<=', searchTerm + '\uf8ff'),
+            orderBy('content'),
+            orderBy('createdAt', 'desc'),
+            limit
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as ChatMessage));
+    } catch (error) {
+        // Fallback to client-side filtering if query fails
+        const allMessagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(100));
+        const allSnapshot = await getDocs(allMessagesQuery);
+        const allMessages = allSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as ChatMessage));
+        
+        return allMessages
+            .filter(msg => msg.content.toLowerCase().includes(searchTerm.toLowerCase()))
+            .slice(0, limit);
+    }
+};
+
 export const getAllUsers = async () => {
     const usersRef = collection(db, 'users');
     const snapshot = await getDocs(usersRef);
@@ -906,6 +1123,7 @@ export const setVerifiedBadge = async (targetUserId: string, isVerified: boolean
 
 export const searchUsers = async (searchTerm: string) => {
     const usersRef = collection(db, 'users');
+    const lowerSearchTerm = searchTerm.toLowerCase();
     
     // Try to find by email first
     const qEmail = query(usersRef, where('email', '==', searchTerm));
@@ -915,16 +1133,50 @@ export const searchUsers = async (searchTerm: string) => {
         return emailSnap.docs.map(d => d.data() as UserProfile);
     }
 
-    // Prefix search for displayName
-    const qName = query(usersRef, 
-        orderBy('displayName'), 
-        where('displayName', '>=', searchTerm), 
-        where('displayName', '<=', searchTerm + '\uf8ff'),
-        limit(10)
-    );
-    
-    const nameSnap = await getDocs(qName);
-    return nameSnap.docs.map(d => d.data() as UserProfile);
+    try {
+        // Prefix search for displayNameLower
+        const qName = query(usersRef, 
+            orderBy('displayNameLower'), 
+            where('displayNameLower', '>=', lowerSearchTerm), 
+            where('displayNameLower', '<=', lowerSearchTerm + '\uf8ff'),
+            limit(10)
+        );
+        
+        const nameSnap = await getDocs(qName);
+        let results = nameSnap.docs.map(d => d.data() as UserProfile);
+        
+        // Also try username search if no results or not many results
+        if (results.length < 10) {
+            const qUsername = query(usersRef, 
+                orderBy('usernameLower'), 
+                where('usernameLower', '>=', lowerSearchTerm), 
+                where('usernameLower', '<=', lowerSearchTerm + '\uf8ff'),
+                limit(10)
+            );
+            
+            const usernameSnap = await getDocs(qUsername);
+            const usernameResults = usernameSnap.docs.map(d => d.data() as UserProfile);
+            
+            // Merge and deduplicate results
+            const resultMap = new Map<string, UserProfile>();
+            results.forEach(r => resultMap.set(r.uid, r));
+            usernameResults.forEach(r => resultMap.set(r.uid, r));
+            results = Array.from(resultMap.values()).slice(0, 10);
+        }
+        
+        return results;
+    } catch (error: any) {
+        // Fallback to client-side filtering if Firestore range queries fail
+        console.log('Firestore range query failed, falling back to client-side filtering:', error);
+        const allUsersSnap = await getDocs(usersRef);
+        const allUsers = allUsersSnap.docs.map(d => d.data() as UserProfile);
+        
+        return allUsers.filter(user => {
+            const displayNameLower = user.displayNameLower || user.displayName?.toLowerCase() || '';
+            const usernameLower = user.usernameLower || user.username?.toLowerCase() || '';
+            return displayNameLower.includes(lowerSearchTerm) || usernameLower.includes(lowerSearchTerm);
+        }).slice(0, 10);
+    }
 };
 
 // --- VOICE CHANNEL FUNCTIONS ---
@@ -1053,3 +1305,35 @@ export const inviteToVoiceChannel = async (sender: UserProfile, targetUserId: st
     });
 };
 
+// --- BOARD STYLING FUNCTIONS ---
+
+export const getDefaultBoardStyle = (): BoardStyle => ({
+    backgroundColor: '#f8fafc',
+    backgroundTexture: 'none',
+    showGrid: true,
+    noiseLevel: 0
+});
+
+export const generateTexturePattern = (
+    texture: BoardStyle['backgroundTexture'],
+    isDarkMode: boolean
+): string => {
+    const lightGrid = 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)';
+    const darkGrid = 'radial-gradient(circle, #64748b 1px, transparent 1px)';
+    
+    switch (texture) {
+        case 'paper':
+            return isDarkMode
+                ? 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,.05) 2px, rgba(255,255,255,.05) 4px)'
+                : 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.02) 2px, rgba(0,0,0,.02) 4px)';
+        case 'dotted':
+            return isDarkMode ? darkGrid : lightGrid;
+        case 'gradient':
+            return isDarkMode
+                ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
+                : 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)';
+        case 'none':
+        default:
+            return 'transparent';
+    }
+};

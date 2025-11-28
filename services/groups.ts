@@ -87,9 +87,12 @@ export interface GroupMessage {
     timestamp: number;
     attachments?: ComposerMedia[];
     replyTo?: string; // ID of message being replied to
-    reactions?: { emoji: string; userIds: string[] }[];
+    reactions?: Record<string, string[]>; // emoji -> array of user IDs
     editedAt?: number;
-    isPinned?: boolean;
+    deletedAt?: number;
+    isDeleted?: boolean;
+    pinned?: boolean;
+    readBy?: string[]; // List of user IDs who have read this message
 }
 
 // --- GROUP OPERATIONS ---
@@ -215,7 +218,7 @@ export const sendGroupMessage = async (channelId: string, messageData: Omit<Grou
     return message;
 };
 
-export const editMessage = async (channelId: string, messageId: string, newContent: string): Promise<void> => {
+export const editGroupMessage = async (channelId: string, messageId: string, newContent: string): Promise<void> => {
     const messageRef = doc(db, 'channels', channelId, 'messages', messageId);
     await updateDoc(messageRef, {
         content: newContent,
@@ -223,53 +226,127 @@ export const editMessage = async (channelId: string, messageId: string, newConte
     });
 };
 
-export const deleteMessage = async (channelId: string, messageId: string): Promise<void> => {
+export const deleteGroupMessage = async (channelId: string, messageId: string): Promise<void> => {
     const messageRef = doc(db, 'channels', channelId, 'messages', messageId);
-    await deleteDoc(messageRef);
+    await updateDoc(messageRef, {
+        isDeleted: true,
+        deletedAt: Date.now(),
+        content: '[message removed]'
+    });
 };
 
-export const toggleMessagePin = async (channelId: string, messageId: string, isPinned: boolean): Promise<void> => {
+export const toggleGroupMessagePin = async (channelId: string, messageId: string, shouldPin: boolean): Promise<void> => {
     const messageRef = doc(db, 'channels', channelId, 'messages', messageId);
-    await updateDoc(messageRef, { isPinned });
+    await updateDoc(messageRef, { pinned: shouldPin });
 };
 
-export const addReaction = async (channelId: string, messageId: string, emoji: string, userId: string): Promise<void> => {
+export const setGroupMessageReadReceipt = async (channelId: string, messageId: string, userId: string): Promise<void> => {
     const messageRef = doc(db, 'channels', channelId, 'messages', messageId);
-    const messageDoc = await getDoc(messageRef);
     
-    if (!messageDoc.exists()) return;
-    
-    const message = messageDoc.data() as GroupMessage;
-    const reactions = message.reactions || [];
-    const existingReaction = reactions.find(r => r.emoji === emoji);
-    
-    if (existingReaction) {
-        existingReaction.userIds = arrayUnion(userId)(existingReaction.userIds);
-    } else {
-        reactions.push({ emoji, userIds: [userId] });
-    }
-    
-    await updateDoc(messageRef, { reactions });
-};
-
-export const removeReaction = async (channelId: string, messageId: string, emoji: string, userId: string): Promise<void> => {
-    const messageRef = doc(db, 'channels', channelId, 'messages', messageId);
-    const messageDoc = await getDoc(messageRef);
-    
-    if (!messageDoc.exists()) return;
-    
-    const message = messageDoc.data() as GroupMessage;
-    const reactions = message.reactions || [];
-    const existingReaction = reactions.find(r => r.emoji === emoji);
-    
-    if (existingReaction) {
-        existingReaction.userIds = arrayRemove(userId)(existingReaction.userIds);
-        if (existingReaction.userIds.length === 0) {
-            reactions.splice(reactions.indexOf(existingReaction), 1);
+    await runTransaction(db, async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists()) return;
+        
+        const message = messageDoc.data() as GroupMessage;
+        const readBy = message.readBy || [];
+        
+        if (!readBy.includes(userId)) {
+            transaction.update(messageRef, { readBy: [...readBy, userId] });
         }
-    }
+    });
+};
+
+export const toggleGroupReaction = async (channelId: string, messageId: string, emoji: string, userId: string): Promise<void> => {
+    const messageRef = doc(db, 'channels', channelId, 'messages', messageId);
     
-    await updateDoc(messageRef, { reactions });
+    await runTransaction(db, async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists()) return;
+        
+        const message = messageDoc.data() as GroupMessage;
+        const reactions = message.reactions || {};
+        const emojiReactors = reactions[emoji] || [];
+        
+        if (emojiReactors.includes(userId)) {
+            // Remove reaction
+            const updatedReactors = emojiReactors.filter(id => id !== userId);
+            if (updatedReactors.length === 0) {
+                delete reactions[emoji];
+            } else {
+                reactions[emoji] = updatedReactors;
+            }
+        } else {
+            // Add reaction
+            reactions[emoji] = [...emojiReactors, userId];
+        }
+        
+        transaction.update(messageRef, { reactions });
+    });
+};
+
+export const setGroupTypingState = async (channelId: string, userId: string, isTyping: boolean): Promise<void> => {
+    const typingRef = doc(db, 'channels', channelId, 'typingStates', userId);
+    if (isTyping) {
+        await setDoc(typingRef, {
+            userId,
+            timestamp: Date.now()
+        });
+    } else {
+        await deleteDoc(typingRef).catch(() => {/* ignore if not exists */});
+    }
+};
+
+export const subscribeToGroupTypingStates = (channelId: string, callback: (typingUsers: string[]) => void): (() => void) => {
+    const typingRef = collection(db, 'channels', channelId, 'typingStates');
+    const now = Date.now();
+    const timeout = 3000; // 3 seconds
+
+    return onSnapshot(typingRef, (snapshot) => {
+        const typingUsers = snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    userId: data.userId,
+                    timestamp: data.timestamp
+                };
+            })
+            .filter(user => now - user.timestamp < timeout)
+            .map(user => user.userId);
+        
+        callback(typingUsers);
+    });
+};
+
+export const searchGroupMessages = async (channelId: string, searchTerm: string, limit: number = 20): Promise<GroupMessage[]> => {
+    const messagesRef = collection(db, 'channels', channelId, 'messages');
+    const q = query(
+        messagesRef,
+        where('content', '>=', searchTerm),
+        where('content', '<=', searchTerm + '\uf8ff'),
+        orderBy('content'),
+        orderBy('timestamp', 'desc'),
+        limit
+    );
+    
+    try {
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GroupMessage));
+    } catch (error) {
+        // Fallback to client-side filtering if query fails
+        const allMessagesQuery = query(messagesRef, orderBy('timestamp', 'desc'), limit(100));
+        const allSnapshot = await getDocs(allMessagesQuery);
+        const allMessages = allSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as GroupMessage));
+        
+        return allMessages
+            .filter(msg => msg.content.toLowerCase().includes(searchTerm.toLowerCase()))
+            .slice(0, limit);
+    }
 };
 
 // --- SUBSCRIPTIONS ---

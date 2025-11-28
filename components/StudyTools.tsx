@@ -7,7 +7,7 @@ import {
     Presentation, File, ZoomIn, ZoomOut, Move, Info, Calculator, Eye,
     Target, Mic, User, PlusCircle, Video as VideoIcon, PlayCircle, GraduationCap, Languages
 } from 'lucide-react';
-import { FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, ToolMode, EquationProblem, LessonPlan, ActiveRecallQuestion, ActiveRecallResponse } from '../types';
+import { FileAttachment, Flashcard, QuizQuestion, ClozeExercise, MindMapNode, DeepDiveType, ToolMode, EquationProblem, LessonPlan, ActiveRecallQuestion, ActiveRecallResponse, VoiceSessionConfig } from '../types';
 import {
     generateFlashcards, generateQuiz, evaluateBlurting, generateMindMap,
     generateCloze, evaluateFeynman, generateDeepDivePrompt,
@@ -26,7 +26,7 @@ import { useActivity } from '../contexts/ActivityContext';
 interface StudyToolsProps {
     attachments: FileAttachment[];
     setAttachments: React.Dispatch<React.SetStateAction<FileAttachment[]>>;
-    onStartVoice: () => void;
+    onStartVoice: (config?: VoiceSessionConfig) => void;
 }
 
 // --- UTILS ---
@@ -572,7 +572,7 @@ export const StudyTools: React.FC<StudyToolsProps> = ({ attachments, setAttachme
     }
 
     if (mode === 'LANGUAGE_LAB') {
-        return <LanguageLab onClose={resetTool} />;
+        return <LanguageLab onStartVoice={onStartVoice} onClose={resetTool} />;
     }
 
     if (mode === 'ACTIVE_RECALL') {

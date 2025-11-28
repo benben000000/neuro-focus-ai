@@ -3,12 +3,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser, subscribeToPresence, UserPresence, deletePost, reportPost } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, BadgeCheck, Flag, Copy, Edit2, Trash2 } from 'lucide-react';
+import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser, subscribeToPresence, UserPresence, createOrGetDirectChat, deletePost } from '../services/social';
+import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, BadgeCheck, Copy, Edit2, Trash2 } from 'lucide-react';
 import { StoryTray } from './StoryTray';
 import { CreateMediaModal } from './CreateMediaModal';
 import { MediaCarousel } from './MediaCarousel';
 import { ShareModal } from './ShareModal';
 import { SharedContentPanel } from './SharedContentPanel';
 import { CommentThread } from './CommentThread';
+import { ProfilePreviewTrigger } from './ui/ProfilePreviewTrigger';
+import { useNavigate } from 'react-router-dom';
 
 const timeAgo = (timestamp: number) => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
@@ -54,25 +58,27 @@ const UserSuggestionRow: React.FC<{ user: UserProfile, currentUserProfile: UserP
 
     return (
         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="relative w-8 h-8">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                        {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" /> : null}
+            <ProfilePreviewTrigger userId={user.uid}>
+                <div className="flex items-center gap-3 flex-1">
+                    <div className="relative w-8 h-8">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                            {user.photoURL ? <img src={user.photoURL} className="w-full h-full object-cover" alt={user.displayName} /> : null}
+                        </div>
+                        <UserPresenceIndicator userId={user.uid} />
                     </div>
-                    <UserPresenceIndicator userId={user.uid} />
+                    <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                            {user.displayName}
+                            {user.isVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                        </p>
+                        <p className="text-xs text-slate-500">New to NeuroFocus</p>
+                    </div>
                 </div>
-                <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                        {user.displayName}
-                        {user.isVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
-                    </p>
-                    <p className="text-xs text-slate-500">New to NeuroFocus</p>
-                </div>
-            </div>
+            </ProfilePreviewTrigger>
             <button 
                 onClick={handleFollowClick}
                 disabled={isLoading}
-                className={`text-xs font-bold ${isFollowing ? 'text-slate-500' : 'text-indigo-600 hover:text-indigo-800'} disabled:opacity-50`}
+                className={`text-xs font-bold ml-2 ${isFollowing ? 'text-slate-500' : 'text-indigo-600 hover:text-indigo-800'} disabled:opacity-50`}
             >
                 {isLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
             </button>
@@ -98,6 +104,25 @@ export function SocialFeed() {
     const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+     const navigate = useNavigate();
+     const { currentUser } = useAuth();
+     const { profile } = useProfile();
+     const [posts, setPosts] = useState<SocialPost[]>([]);
+     const [optimisticPosts, setOptimisticPosts] = useState<SocialPost[]>([]);
+     const [loading, setLoading] = useState(true);
+     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+     const [createMode, setCreateMode] = useState<'post' | 'story'>('post');
+     const [shareModalContent, setShareModalContent] = useState<{ type: 'post' | 'story', id: string } | null>(null);
+     const [activeCommentThreadId, setActiveCommentThreadId] = useState<string | null>(null);
+     const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+     const [editingPost, setEditingPost] = useState<SocialPost | null>(null);
+     const menuRef = useRef<HTMLDivElement>(null);
+
+     // Sidebar states
+     const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
+     const [searchQuery, setSearchQuery] = useState('');
+     const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+     const [searchDebounce, setSearchDebounce] = useState<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const unsubscribe = subscribeToFeed((newPosts) => {
@@ -142,11 +167,26 @@ export function SocialFeed() {
         setSuggestions(users);
     };
 
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
-        const results = await searchUsers(searchQuery);
-        setSearchResults(results);
+    const handleSearch = async (query: string) => {
+        if (searchDebounce) {
+            clearTimeout(searchDebounce);
+        }
+
+        if (!query.trim()) {
+            setSearchResults([]);
+            return;
+        }
+
+        const timeout = setTimeout(async () => {
+            try {
+                const results = await searchUsers(query);
+                setSearchResults(results);
+            } catch (error) {
+                console.error('Search failed:', error);
+            }
+        }, 300);
+
+        setSearchDebounce(timeout);
     };
 
     const handleLike = async (postId: string) => {
@@ -252,10 +292,67 @@ export function SocialFeed() {
                                             <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white">
                                                 {post.authorPhoto ? (
                                                     <img src={post.authorPhoto} className="w-full h-full object-cover" />
+                                    <ProfilePreviewTrigger userId={post.authorId}>
+                                        <div className="flex items-center gap-3 flex-1">
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
+                                                <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white">
+                                                    {post.authorPhoto ? (
+                                                        <img src={post.authorPhoto} className="w-full h-full object-cover" alt={post.authorName} />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center font-bold text-xs text-slate-400">
+                                                            {post.authorName[0]}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer flex items-center gap-1">
+                                                    {post.authorName}
+                                                    {post.authorIsVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                                                </h3>
+                                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                    {post.location && <span>📍 {post.location}</span>}
+                                                    {post.listeningTo && post.location && <span>•</span>}
+                                                    {post.listeningTo && <span>🎧 {post.listeningTo.title}{post.listeningTo.artist ? ` — ${post.listeningTo.artist}` : ''}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </ProfilePreviewTrigger>
+                                    <div className="relative" ref={menuRef}>
+                                        <button
+                                            onClick={() => setOpenMenuPostId(openMenuPostId === post.id ? null : post.id)}
+                                            className="text-slate-500 hover:text-slate-900 dark:hover:text-white p-1"
+                                        >
+                                            <MoreHorizontal size={20} />
+                                        </button>
+
+                                        {/* Action Menu Popover */}
+                                        {openMenuPostId === post.id && (
+                                            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-50 min-w-[180px] py-1">
+                                                {currentUser?.uid === post.authorId ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleEditPost(post)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            <Edit2 size={16} /> Edit post
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeletePost(post.id)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2"
+                                                        >
+                                                            <Trash2 size={16} /> Delete post
+                                                        </button>
+                                                    </>
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center font-bold text-xs text-slate-400">
-                                                        {post.authorName[0]}
-                                                    </div>
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleCopyLink(post.id)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            <Copy size={16} /> Copy link
+                                                        </button>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
@@ -314,6 +411,8 @@ export function SocialFeed() {
                                                     </>
                                                 )}
                                             </div>
+                                        )}
+                                    </div>
                                         )}
                                     </div>
                                 </div>
@@ -437,16 +536,67 @@ export function SocialFeed() {
                 <SharedContentPanel />
 
                 {/* Search */}
-                <form onSubmit={handleSearch} className="relative">
+                <div className="relative">
                     <input
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search"
-                        className="w-full bg-slate-100 dark:bg-slate-800 border-0 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-slate-300 outline-none"
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            handleSearch(e.target.value);
+                        }}
+                        placeholder="Search people"
+                        className="w-full bg-slate-100 dark:bg-slate-800 border-0 rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-indigo-300 outline-none"
                     />
                     <Search size={16} className="absolute left-3 top-2.5 text-slate-400" />
-                </form>
+                    
+                    {/* Search Results */}
+                    {searchResults.length > 0 && searchQuery.trim() && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-slate-200 dark:border-slate-800 z-40 max-h-96 overflow-y-auto">
+                            {searchResults.map(user => (
+                                <div key={user.uid} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                                    <ProfilePreviewTrigger userId={user.uid}>
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex-shrink-0">
+                                                {user.photoURL ? (
+                                                    <img src={user.photoURL} className="w-full h-full object-cover" alt={user.displayName} />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center font-bold text-xs text-slate-400">
+                                                        {user.displayName[0]}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-sm text-slate-900 dark:text-white truncate">{user.displayName}</p>
+                                                {user.username && <p className="text-xs text-slate-500">@{user.username}</p>}
+                                            </div>
+                                        </div>
+                                    </ProfilePreviewTrigger>
+                                    <button
+                                        onClick={async () => {
+                                            if (!currentUser || !profile) return;
+                                            try {
+                                                const chatId = await createOrGetDirectChat(
+                                                    currentUser.uid,
+                                                    { displayName: profile.displayName, photoURL: profile.photoURL },
+                                                    user.uid,
+                                                    { displayName: user.displayName, photoURL: user.photoURL }
+                                                );
+                                                navigate(`/chat?dm=${chatId}`);
+                                                setSearchQuery('');
+                                                setSearchResults([]);
+                                            } catch (error) {
+                                                console.error('Failed to open DM', error);
+                                            }
+                                        }}
+                                        className="ml-2 px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-medium hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex-shrink-0"
+                                    >
+                                        Message
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
                 {/* Suggestions */}
                 <div>

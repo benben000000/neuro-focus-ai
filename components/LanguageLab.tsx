@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Mic, BookOpen, MessageSquare, PenTool, Globe, Trophy, Flame, Target } from 'lucide-react';
+import { VoiceSessionConfig } from '../types';
 
 interface LanguageLabProps {
-  onStartVoice?: () => void;
+  onStartVoice?: (config?: VoiceSessionConfig) => void;
   onClose?: () => void;
 }
 
@@ -36,7 +37,7 @@ export function LanguageLab({ onStartVoice, onClose }: LanguageLabProps) {
             </select>
 
             <button 
-                onClick={onStartVoice}
+                onClick={() => onStartVoice?.({ targetLanguage: selectedLanguage })}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors shadow-sm"
             >
                 <Mic size={20} />

@@ -7,6 +7,7 @@ import { BookOpen, Brain, Trophy, Activity, Timer, ChevronRight } from 'lucide-r
 import { FileAttachment } from '../types';
 import { identifyDocumentSubject } from '../services/gemini';
 import { FileUploader } from './FileUploader';
+import { PomodoroTimer } from './PomodoroTimer';
 import { useActivity } from '../contexts/ActivityContext';
 import { formatTime } from '../services/learning';
 
@@ -117,6 +118,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
           </div>
         ))}
       </div>
+
+      {/* Pomodoro Timer */}
+      <PomodoroTimer />
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

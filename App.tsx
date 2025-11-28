@@ -19,6 +19,8 @@ import { ChatSystem } from './components/ChatSystem';
 import { LanguageLab } from './components/LanguageLab';
 import { useSecurity } from './hooks/useSecurity';
 import { ErrorBoundary, SocialErrorBoundary, StudyErrorBoundary, ChatErrorBoundary } from './components/ErrorBoundary';
+import { OnboardingProvider } from './contexts/OnboardingContext';
+import { TutorialManager } from './components/ui/TutorialManager';
 
 // Private Route Wrapper
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -80,6 +82,8 @@ function AppContent() {
 
   return (
     <>
+      <TutorialManager />
+      
       {isVoiceMode && (
         <div className="fixed inset-0 z-[60]">
           <ChatErrorBoundary>
@@ -167,7 +171,9 @@ export default function App() {
         <AuthProvider>
           <ProfileProvider>
             <ActivityProvider>
-              <AppContent />
+              <OnboardingProvider>
+                <AppContent />
+              </OnboardingProvider>
             </ActivityProvider>
           </ProfileProvider>
         </AuthProvider>

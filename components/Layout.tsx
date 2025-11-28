@@ -101,19 +101,32 @@ export function Layout({
 
                 <nav className="space-y-2 flex-1">
                     <NavItem path="/dashboard" icon={Home} label="Home" />
-                    <NavItem path="/tutor" icon={GraduationCap} label="AI Tutor" />
-                    <NavItem path="/language" icon={Globe} label="Language" />
-                    <NavItem path="/tools" icon={LibraryBig} label="Tools" />
-                    <NavItem path="/community" icon={Users} label="Community" />
-                    <NavItem path="/chat" icon={MessageCircle} label="Messages" />
+                    <div data-tour="nav-tutor">
+                        <NavItem path="/tutor" icon={GraduationCap} label="AI Tutor" />
+                    </div>
+                    <div data-tour="nav-language">
+                        <NavItem path="/language" icon={Globe} label="Language" />
+                    </div>
+                    <div data-tour="nav-tools">
+                        <NavItem path="/tools" icon={LibraryBig} label="Tools" />
+                    </div>
+                    <div data-tour="nav-community">
+                        <NavItem path="/community" icon={Users} label="Community" />
+                    </div>
+                    <div data-tour="nav-messages">
+                        <NavItem path="/chat" icon={MessageCircle} label="Messages" />
+                    </div>
                     <NotificationCenter />
-                    <NavItem path="/profile" icon={User} label="Profile" />
+                    <div data-tour="nav-profile">
+                        <NavItem path="/profile" icon={User} label="Profile" />
+                    </div>
                 </nav>
 
                 <div className="space-y-2 mt-auto">
                     <button
                         onClick={onStartVoice}
                         className="w-full flex items-center gap-4 p-3 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group"
+                        data-tour="voice-mode-btn"
                     >
                         <Mic size={24} className="group-hover:text-rose-500 transition-colors" />
                         <span className="hidden xl:block font-medium">Voice Mode</span>

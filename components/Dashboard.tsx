@@ -10,6 +10,7 @@ import { FileUploader } from './FileUploader';
 import { PomodoroTimer } from './PomodoroTimer';
 import { useActivity } from '../contexts/ActivityContext';
 import { formatTime } from '../services/learning';
+import { useOnboarding } from '../contexts/OnboardingContext';
 
 interface DashboardProps {
   attachments: FileAttachment[];
@@ -18,6 +19,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachments }) => {
   const { stats, isTracking, sessionDuration, currentSubject, setSubject } = useActivity();
+  const { hasSeenTutorial, startTutorial } = useOnboarding();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [complexity, setComplexity] = useState(0);
 
@@ -39,6 +41,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
 
     analyzeContext();
   }, [attachments.length, setSubject]);
+
+  // Auto-start tutorial for first-time users
+  useEffect(() => {
+    if (!hasSeenTutorial) {
+      // Small delay to ensure UI is rendered
+      const timer = setTimeout(() => {
+        startTutorial();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasSeenTutorial, startTutorial]);
 
   const activityData = stats.sessions.slice(0, 7).reverse().map((s, i) => ({
     name: `S${i + 1}`,
@@ -102,7 +115,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-tour="dashboard-stats">
         {[
           { label: 'Complexity', value: complexity > 0 ? complexity : '-', icon: Activity, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
           { label: 'Retention', value: `${stats.averageRetentionRate}%`, icon: Brain, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
@@ -120,7 +133,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ attachments, setAttachment
       </div>
 
       {/* Pomodoro Timer */}
-      <PomodoroTimer />
+      <div data-tour="pomodoro-timer">
+        <PomodoroTimer />
+      </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

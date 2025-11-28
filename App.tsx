@@ -17,6 +17,7 @@ import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
 import { LanguageLab } from './components/LanguageLab';
+import { NoteSummarizer } from './components/NoteSummarizer';
 import { useSecurity } from './hooks/useSecurity';
 import { ErrorBoundary, SocialErrorBoundary, StudyErrorBoundary, ChatErrorBoundary } from './components/ErrorBoundary';
 import { OnboardingProvider } from './contexts/OnboardingContext';
@@ -139,6 +140,11 @@ function AppContent() {
                 setAttachments={setAttachments}
                 onStartVoice={handleStartVoice}
               />
+            </StudyErrorBoundary>
+          } />
+          <Route path="notes" element={
+            <StudyErrorBoundary>
+              <NoteSummarizer />
             </StudyErrorBoundary>
           } />
           <Route path="profile" element={<Profile />} />

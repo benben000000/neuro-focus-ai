@@ -17,7 +17,8 @@ import {
     ChevronDown,
     Timer,
     Globe,
-    Languages
+    Languages,
+    FileText
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
@@ -108,11 +109,12 @@ export function Layout({
                         <NavItem path="/language" icon={Globe} label="Language" />
                     </div>
                     <div data-tour="nav-tools">
-                        <NavItem path="/tools" icon={LibraryBig} label="Tools" />
-                    </div>
-                    <div data-tour="nav-community">
-                        <NavItem path="/community" icon={Users} label="Community" />
-                    </div>
+                         <NavItem path="/tools" icon={LibraryBig} label="Tools" />
+                     </div>
+                     <NavItem path="/notes" icon={FileText} label="Notes" />
+                     <div data-tour="nav-community">
+                         <NavItem path="/community" icon={Users} label="Community" />
+                     </div>
                     <div data-tour="nav-messages">
                         <NavItem path="/chat" icon={MessageCircle} label="Messages" />
                     </div>
@@ -205,22 +207,23 @@ export function Layout({
             </main>
 
             {/* Mobile Bottom Navigation */}
-            <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-40 pb-safe">
-                <NavItem path="/dashboard" icon={Home} label="Home" isMobile />
-                <NavItem path="/tutor" icon={GraduationCap} label="Tutor" isMobile />
-                <NavItem path="/language" icon={Globe} label="Lang" isMobile />
-                <div className="flex items-center justify-center">
-                    <button
-                        onClick={onStartVoice}
-                        className="w-10 h-10 bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-slate-900 shadow-lg active:scale-95 transition-transform"
-                    >
-                        <Mic size={20} />
-                    </button>
-                </div>
-                <NavItem path="/tools" icon={LibraryBig} label="Tools" isMobile />
-                <NavItem path="/community" icon={Users} label="Social" isMobile />
-                <NavItem path="/profile" icon={User} label="Profile" isMobile />
-            </nav>
+             <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-40 pb-safe">
+                 <NavItem path="/dashboard" icon={Home} label="Home" isMobile />
+                 <NavItem path="/tutor" icon={GraduationCap} label="Tutor" isMobile />
+                 <NavItem path="/language" icon={Globe} label="Lang" isMobile />
+                 <div className="flex items-center justify-center">
+                     <button
+                         onClick={onStartVoice}
+                         className="w-10 h-10 bg-slate-900 dark:bg-white rounded-xl flex items-center justify-center text-white dark:text-slate-900 shadow-lg active:scale-95 transition-transform"
+                     >
+                         <Mic size={20} />
+                     </button>
+                 </div>
+                 <NavItem path="/notes" icon={FileText} label="Notes" isMobile />
+                 <NavItem path="/tools" icon={LibraryBig} label="Tools" isMobile />
+                 <NavItem path="/community" icon={Users} label="Social" isMobile />
+                 <NavItem path="/profile" icon={User} label="Profile" isMobile />
+             </nav>
 
             <MusicPlayer />
         </div>

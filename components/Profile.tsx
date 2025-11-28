@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { useActivity } from '../contexts/ActivityContext';
@@ -218,10 +219,11 @@ const LevelSummary = ({ level, xp }: { level: number; xp: number }) => {
 };
 
 export function Profile() {
-    const { currentUser } = useAuth();
-    const { profile, loading: profileLoading, refreshProfile } = useProfile();
-    const { stats: progressSummary } = useActivity();
-    const { resetTutorial } = useOnboarding();
+     const navigate = useNavigate();
+     const { currentUser } = useAuth();
+     const { profile, loading: profileLoading, refreshProfile } = useProfile();
+     const { stats: progressSummary } = useActivity();
+     const { resetTutorial } = useOnboarding();
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [editUsername, setEditUsername] = useState('');
@@ -1464,10 +1466,29 @@ export function Profile() {
                         Loading saved posts...
                     </div>
                 ) : filteredPosts.length === 0 ? (
-                    <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-                        {activeFilter === 'saved' 
-                            ? 'No saved posts yet. Bookmark posts from the feed to see them here.' 
-                            : 'No posts yet in this view. Share a study moment from the Community tab to build your portfolio.'}
+                    <div className="py-10 text-center">
+                        {activeFilter === 'saved' ? (
+                            <div className="text-sm text-slate-500 dark:text-slate-400">
+                                No saved posts yet. Bookmark posts from the feed to see them here.
+                            </div>
+                        ) : activeFilter === 'notes' ? (
+                            <div className="space-y-4">
+                                <div className="text-sm text-slate-500 dark:text-slate-400">
+                                    No notes yet. Start summarizing your notes to build your collection.
+                                </div>
+                                <button
+                                    onClick={() => navigate('/notes')}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+                                >
+                                    <FileText size={16} />
+                                    Go to Note Summarizer
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-500 dark:text-slate-400">
+                                No posts yet in this view. Share a study moment from the Community tab to build your portfolio.
+                            </div>
+                        )}
                     </div>
                 ) : layoutMode === 'board' ? (
                     <div 

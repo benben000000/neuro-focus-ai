@@ -12,6 +12,7 @@ interface LiveVoiceTutorProps {
   systemInstructionOverride?: string;
   onFeedback?: (data: any) => void;
   targetPhrase?: string;
+  targetLanguage?: string;
 }
 
 // Helper to convert Float32Array (Web Audio) to PCM Int16 (Gemini)
@@ -109,7 +110,7 @@ const toolDeclarations: FunctionDeclaration[] = [
 
 const PRIMARY_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachments, mode = 'general', systemInstructionOverride, onFeedback, targetPhrase }) => {
+export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachments, mode = 'general', systemInstructionOverride, onFeedback, targetPhrase, targetLanguage }) => {
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [isMuted, setIsMuted] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -176,13 +177,17 @@ export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachm
         }
       });
 
-      const defaultSystemInstruction = `You are NeuroFocus, an advanced AI tutor.
+      let defaultSystemInstruction = `You are NeuroFocus, an advanced AI tutor.
         CONTEXT DOCUMENTS: ${fileContext}
         PROTOCOL:
         1. **Strict Grounding**: Use the text above. If I ask about the file, answer from it.
         2. **Socratic Method**: Don't just lecture. Ask me questions to check my understanding.
         3. **Concise**: Keep responses short and conversational.
         4. **Adaptive**: Adjust difficulty based on my answers.`;
+      
+      if (targetLanguage) {
+        defaultSystemInstruction += `\n5. **Language Mode**: Respond exclusively in ${targetLanguage}. Greet the user in ${targetLanguage}, conduct the entire conversation in ${targetLanguage}, and correct any language mistakes I make. If I speak in another language, gently remind me to practice in ${targetLanguage}.`;
+      }
       
       const systemInstruction = systemInstructionOverride || defaultSystemInstruction;
 
@@ -191,6 +196,16 @@ export const LiveVoiceTutor: React.FC<LiveVoiceTutorProps> = ({ onClose, attachm
         callbacks: {
           onopen: () => {
             setStatus('connected');
+            
+            // Send language mode reinforcement if targetLanguage is set
+            if (targetLanguage) {
+              sessionPromise.then(session => {
+                session.sendRealtimeInput({ 
+                  content: [{ text: `Greet me in ${targetLanguage} and let's begin our conversation entirely in ${targetLanguage}.` }] 
+                });
+              });
+            }
+            
             // Send Images
             if (attachments.length > 0) {
               const parts: any[] = [];

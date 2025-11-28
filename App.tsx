@@ -12,7 +12,7 @@ import { Onboarding } from './components/Onboarding';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProfileProvider, useProfile } from './contexts/ProfileContext';
 import { ActivityProvider } from './contexts/ActivityContext';
-import { FileAttachment } from './types';
+import { FileAttachment, VoiceSessionConfig } from './types';
 import { Profile } from './components/Profile';
 import { SocialFeed } from './components/SocialFeed';
 import { ChatSystem } from './components/ChatSystem';
@@ -48,6 +48,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 function AppContent() {
   useSecurity();
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [voiceSessionConfig, setVoiceSessionConfig] = useState<VoiceSessionConfig | undefined>(undefined);
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
 
   // --- THEME STATE ---
@@ -67,12 +68,26 @@ function AppContent() {
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
+  const handleStartVoice = (config?: VoiceSessionConfig) => {
+    setVoiceSessionConfig(config);
+    setIsVoiceMode(true);
+  };
+
+  const handleCloseVoice = () => {
+    setIsVoiceMode(false);
+    setVoiceSessionConfig(undefined);
+  };
+
   return (
     <>
       {isVoiceMode && (
         <div className="fixed inset-0 z-[60]">
           <ChatErrorBoundary>
-            <LiveVoiceTutor onClose={() => setIsVoiceMode(false)} attachments={attachments} />
+            <LiveVoiceTutor 
+              onClose={handleCloseVoice} 
+              attachments={attachments} 
+              targetLanguage={voiceSessionConfig?.targetLanguage}
+            />
           </ChatErrorBoundary>
         </div>
       )}
@@ -90,7 +105,7 @@ function AppContent() {
 
         <Route path="/" element={
           <PrivateRoute>
-            <Layout theme={theme} toggleTheme={toggleTheme} onStartVoice={() => setIsVoiceMode(true)} />
+            <Layout theme={theme} toggleTheme={toggleTheme} onStartVoice={handleStartVoice} />
           </PrivateRoute>
         }>
           <Route path="dashboard" element={
@@ -104,13 +119,13 @@ function AppContent() {
               <ChatTutor
                 attachments={attachments}
                 setAttachments={setAttachments}
-                onStartVoice={() => setIsVoiceMode(true)}
+                onStartVoice={handleStartVoice}
               />
             </ChatErrorBoundary>
           } />
           <Route path="language" element={
             <ChatErrorBoundary>
-              <LanguageLab onStartVoice={() => setIsVoiceMode(true)} />
+              <LanguageLab onStartVoice={handleStartVoice} />
             </ChatErrorBoundary>
           } />
           <Route path="tools" element={
@@ -118,7 +133,7 @@ function AppContent() {
               <StudyTools
                 attachments={attachments}
                 setAttachments={setAttachments}
-                onStartVoice={() => setIsVoiceMode(true)}
+                onStartVoice={handleStartVoice}
               />
             </StudyErrorBoundary>
           } />

@@ -7,33 +7,24 @@ import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
 import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move, Loader, Palette, Grid3x3, Texture } from 'lucide-react';
+import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, MoodBoardLayout, subscribeToPresence, UserPresence, MoodBoardItem } from '../services/social';
+import { formatTime } from '../services/learning';
+import type { UserProgress } from '../types';
+import { MediaCarousel } from './MediaCarousel';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move, Loader, Copy, Trash2 } from 'lucide-react';
 import { CommentThread } from './CommentThread';
 import { Toggle } from './ui/Toggle';
 
 interface DraggablePostCardProps {
-    post: SocialPost;
-    config: {
-        postId: string;
-        x: number;
-        y: number;
-        rotation: number;
-        scale: number;
-        zIndex: number;
-        isFeatured?: boolean;
-    };
+    post: SocialPost | null; // null for stickers without associated post
+    config: MoodBoardItem;
     isOwner: boolean;
-    onUpdate: (id: string, updates: Partial<{
-        postId: string;
-        x: number;
-        y: number;
-        rotation: number;
-        scale: number;
-        zIndex: number;
-        isFeatured?: boolean;
-    }>) => void;
+    onUpdate: (id: string, updates: Partial<MoodBoardItem>) => void;
     onInteract: () => void;
     maxZ: number;
     onBringToFront: () => void;
+    isSelected?: boolean;
+    onSelect?: (selected: boolean) => void;
 }
 
 const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
@@ -43,7 +34,9 @@ const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
     onUpdate,
     onInteract,
     maxZ,
-    onBringToFront
+    onBringToFront,
+    isSelected = false,
+    onSelect
 }: DraggablePostCardProps) => {
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -55,13 +48,17 @@ const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
     }, [config.x, config.y]);
 
     const handlePointerDown = (e: React.PointerEvent) => {
-        if (!isOwner) return;
+        if (!isOwner) {
+            if (!isDragging) onInteract();
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         setIsDragging(true);
         setDragStart({ x: e.clientX - currentPos.x, y: e.clientY - currentPos.y });
         dragDistance.current = 0;
         onBringToFront();
+        onSelect?.(true);
         (e.target as Element).setPointerCapture(e.pointerId);
     };
 
@@ -77,9 +74,8 @@ const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
 
     const handlePointerUp = (e: React.PointerEvent) => {
         if (!isDragging) {
-             // If not dragging (e.g. visitor click), we want to interact
-             if (!isOwner) onInteract();
-             return;
+            if (!isOwner) onInteract();
+            return;
         }
         e.preventDefault();
         e.stopPropagation();
@@ -89,42 +85,60 @@ const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
         if (dragDistance.current < 5) {
             onInteract();
         } else {
-            onUpdate(post.id, { x: currentPos.x, y: currentPos.y });
+            onUpdate(config.id, { x: currentPos.x, y: currentPos.y });
         }
     };
-    
-    // For visitors, simple click handler
+
     const handleClick = (e: React.MouseEvent) => {
-        if (!isOwner) {
+        if (isOwner) {
+            e.stopPropagation();
+            onSelect?.(!isSelected);
+        } else {
             onInteract();
         }
     };
 
     const toggleFeatured = (e: React.MouseEvent) => {
         e.stopPropagation();
-        onUpdate(post.id, { isFeatured: !config.isFeatured });
+        onUpdate(config.id, { isFeatured: !config.isFeatured });
     };
 
-    const thumbnailUrl = post.media && post.media.length > 0 ? post.media[0].url : post.mediaUrl;
-    if (!thumbnailUrl) return null;
+    const thumbnailUrl = config.kind === 'sticker' 
+        ? config.assetUrl 
+        : post?.media && post.media.length > 0 ? post.media[0].url : post?.mediaUrl;
+    
+    if (!thumbnailUrl) {
+        return (
+            <div
+                className="absolute touch-none select-none bg-slate-200 dark:bg-slate-700 rounded-lg shadow-md border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center"
+                style={{
+                    transform: `translate(${currentPos.x}px, ${currentPos.y}px) rotate(${config.rotation}deg) scale(${config.scale})`,
+                    zIndex: config.zIndex,
+                    width: 180,
+                    height: 240,
+                }}
+            >
+                <div className="text-center text-xs text-slate-500">Missing {config.kind === 'sticker' ? 'sticker' : 'image'}</div>
+            </div>
+        );
+    }
 
     return (
         <div
-            className="absolute touch-none select-none transition-shadow"
+            className={`absolute touch-none select-none transition-shadow cursor-grab ${isDragging ? 'cursor-grabbing' : ''} ${isSelected && isOwner ? 'ring-2 ring-indigo-500' : ''}`}
             style={{
                 transform: `translate(${currentPos.x}px, ${currentPos.y}px) rotate(${config.rotation}deg) scale(${config.scale * (config.isFeatured ? 1.2 : 1)})`,
                 zIndex: config.zIndex,
                 width: 180,
-                cursor: isOwner ? (isDragging ? 'grabbing' : 'grab') : 'pointer',
             }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onClick={handleClick}
         >
-            <div className={`relative bg-white dark:bg-slate-800 p-2 rounded-lg shadow-md ${isDragging ? 'shadow-2xl scale-105' : ''} transition-all duration-200`}>
+            <div className={`relative bg-white dark:bg-slate-800 p-2 rounded-lg shadow-md ${isDragging ? 'shadow-2xl' : ''} transition-all duration-200 ${isSelected && isOwner ? 'border-2 border-indigo-400' : ''}`}>
                 <div className="relative aspect-[4/5] overflow-hidden rounded-md pointer-events-none">
-                    <img src={thumbnailUrl} className="w-full h-full object-cover" draggable={false} />
+                    <img src={thumbnailUrl} alt={config.alt || 'Board item'} className="w-full h-full object-cover" draggable={false} />
                     {config.isFeatured && (
                         <div className="absolute top-2 right-2 text-yellow-400 drop-shadow-md">
                             <Star size={20} fill="currentColor" />
@@ -133,12 +147,39 @@ const DraggablePostCard: React.FC<DraggablePostCardProps> = ({
                 </div>
                 
                 {isOwner && (
-                    <button 
-                        onClick={toggleFeatured}
-                        className={`absolute -top-2 -right-2 p-1.5 rounded-full shadow-md border transition-colors ${config.isFeatured ? 'bg-yellow-100 text-yellow-600 border-yellow-200' : 'bg-white dark:bg-slate-700 text-slate-400 border-slate-200 dark:border-slate-600 hover:text-yellow-500'}`}
-                    >
-                        <Star size={14} fill={config.isFeatured ? "currentColor" : "none"} />
-                    </button>
+                    <div className="absolute inset-0 pointer-events-none flex items-start justify-between p-2">
+                        <button 
+                            onClick={toggleFeatured}
+                            className={`absolute -top-2 -right-2 p-1.5 rounded-full shadow-md border transition-colors pointer-events-auto ${config.isFeatured ? 'bg-yellow-100 text-yellow-600 border-yellow-200' : 'bg-white dark:bg-slate-700 text-slate-400 border-slate-200 dark:border-slate-600 hover:text-yellow-500'}`}
+                        >
+                            <Star size={14} fill={config.isFeatured ? "currentColor" : "none"} />
+                        </button>
+                    </div>
+                )}
+
+                {isSelected && isOwner && (
+                    <div className="absolute -bottom-16 left-1/2 transform -translate-x-1/2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl p-3 border border-slate-200 dark:border-slate-700 space-y-2 pointer-events-auto z-50">
+                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">Scale: {config.scale.toFixed(2)}x</div>
+                        <input
+                            type="range"
+                            min="0.5"
+                            max="2"
+                            step="0.1"
+                            value={config.scale}
+                            onChange={(e) => onUpdate(config.id, { scale: parseFloat(e.target.value) })}
+                            className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-2">Rotation: {Math.round(config.rotation)}°</div>
+                        <input
+                            type="range"
+                            min="-30"
+                            max="30"
+                            step="1"
+                            value={config.rotation}
+                            onChange={(e) => onUpdate(config.id, { rotation: parseFloat(e.target.value) })}
+                            className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                        />
+                    </div>
                 )}
             </div>
         </div>
@@ -210,10 +251,12 @@ export function Profile() {
     const [viewerTouchStartX, setViewerTouchStartX] = useState<number | null>(null);
 
     // Mood Board State
-    const [moodBoardPosts, setMoodBoardPosts] = useState<NonNullable<UserProfile['moodBoardConfig']>['posts']>([]);
+    const [moodBoardPosts, setMoodBoardPosts] = useState<MoodBoardItem[]>([]);
     const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
     const [isDraggingBoard, setIsDraggingBoard] = useState(false);
     const [boardDragStart, setBoardDragStart] = useState({ x: 0, y: 0 });
+    const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+    const [designMode, setDesignMode] = useState(true);
     const moodBoardRef = useRef<HTMLDivElement>(null);
     const [boardStyle, setBoardStyle] = useState<BoardStyle>(getDefaultBoardStyle());
     const [showStylePanel, setShowStylePanel] = useState(false);
@@ -224,14 +267,41 @@ export function Profile() {
             const availablePostIds = new Set(userPosts.map(p => p.id));
             
             if (profile?.moodBoardConfig?.posts && profile.moodBoardConfig.posts.length > 0) {
-                 // Merge stored config with current posts availability
-                 const validConfigPosts = profile.moodBoardConfig.posts.filter(p => availablePostIds.has(p.postId));
+                 // Handle both legacy format (postId as string) and new format (MoodBoardItem)
+                 const items = profile.moodBoardConfig.posts.map(item => {
+                     // Migrate legacy format to new format
+                     if ('postId' in item && typeof (item as any).postId === 'string' && !('kind' in item)) {
+                         const legacyItem = item as any;
+                         return {
+                             id: legacyItem.postId,
+                             kind: 'post' as const,
+                             postId: legacyItem.postId,
+                             x: legacyItem.x,
+                             y: legacyItem.y,
+                             rotation: legacyItem.rotation || 0,
+                             scale: legacyItem.scale || 1,
+                             zIndex: legacyItem.zIndex || 1,
+                             isFeatured: legacyItem.isFeatured || false
+                         };
+                     }
+                     return item as MoodBoardItem;
+                 });
+                 
+                 // Filter posts that are actually in the userPosts (in case some were deleted)
+                 const validConfigPosts = items.filter(p => {
+                     if (p.kind === 'post' && p.postId) {
+                         return availablePostIds.has(p.postId);
+                     }
+                     return true; // Keep stickers
+                 });
                  
                  // Add new posts that aren't in config yet
-                 const existingConfigIds = new Set(validConfigPosts.map(p => p.postId));
+                 const existingConfigIds = new Set(validConfigPosts.map(p => p.kind === 'post' ? p.postId : null).filter(Boolean));
                  const newPosts = userPosts.filter(p => !existingConfigIds.has(p.id));
                  
-                 const additionalLayout = newPosts.map((post, i) => ({
+                 const additionalLayout: MoodBoardItem[] = newPosts.map((post, i) => ({
+                    id: post.id,
+                    kind: 'post' as const,
                     postId: post.id,
                     x: (validConfigPosts.length + i) % 3 * 220 + 20,
                     y: Math.floor((validConfigPosts.length + i) / 3) * 280 + 20,
@@ -252,7 +322,9 @@ export function Profile() {
                 }
             } else {
                 // Initialize default layout
-                const initialLayout = userPosts.slice(0, 20).map((post, i) => ({
+                const initialLayout: MoodBoardItem[] = userPosts.slice(0, 20).map((post, i) => ({
+                    id: post.id,
+                    kind: 'post' as const,
                     postId: post.id,
                     x: (i % 3) * 200 + 40,
                     y: Math.floor(i / 3) * 260 + 40,
@@ -289,15 +361,176 @@ export function Profile() {
     };
 
 
-    const handlePostUpdate = (postId: string, updates: Partial<NonNullable<UserProfile['moodBoardConfig']>['posts'][0]>) => {
-        setMoodBoardPosts(prev => prev.map(p => p.postId === postId ? { ...p, ...updates } : p));
+    const handlePostUpdate = (itemId: string, updates: Partial<MoodBoardItem>) => {
+        const updatedItems = moodBoardPosts.map(p => p.id === itemId ? { ...p, ...updates } : p);
+        setMoodBoardPosts(updatedItems);
+        // Save immediately
+        if (currentUser) {
+            updateUserProfile(currentUser.uid, {
+                moodBoardConfig: {
+                    posts: updatedItems,
+                    panelOffset
+                }
+            }).catch(err => console.error('Failed to save transform:', err));
+        }
     };
 
-    const handleBringToFront = (postId: string) => {
+    const handleBringToFront = (itemId: string) => {
         setMoodBoardPosts(prev => {
             const maxZ = Math.max(...prev.map(p => p.zIndex), 0);
-            return prev.map(p => p.postId === postId ? { ...p, zIndex: maxZ + 1 } : p);
+            const updated = prev.map(p => p.id === itemId ? { ...p, zIndex: maxZ + 1 } : p);
+            if (currentUser) {
+                updateUserProfile(currentUser.uid, {
+                    moodBoardConfig: {
+                        posts: updated,
+                        panelOffset
+                    }
+                }).catch(err => console.error('Failed to update z-index:', err));
+            }
+            return updated;
         });
+    };
+
+    const handleSendToBack = (itemId: string) => {
+        setMoodBoardPosts(prev => {
+            const minZ = Math.min(...prev.map(p => p.zIndex), 1);
+            const updated = prev.map(p => p.id === itemId ? { ...p, zIndex: minZ - 1 } : p);
+            if (currentUser) {
+                updateUserProfile(currentUser.uid, {
+                    moodBoardConfig: {
+                        posts: updated,
+                        panelOffset
+                    }
+                }).catch(err => console.error('Failed to update z-index:', err));
+            }
+            return updated;
+        });
+    };
+
+    const handleAddSticker = async () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = async (e: any) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            try {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    let dataUrl = event.target?.result as string;
+                    
+                    // Compress image if needed
+                    if (file.size > 500000) {
+                        const img = new Image();
+                        img.onload = async () => {
+                            const canvas = document.createElement('canvas');
+                            const maxDim = 800;
+                            let width = img.width;
+                            let height = img.height;
+                            
+                            if (width > height) {
+                                if (width > maxDim) {
+                                    height *= maxDim / width;
+                                    width = maxDim;
+                                }
+                            } else {
+                                if (height > maxDim) {
+                                    width *= maxDim / height;
+                                    height = maxDim;
+                                }
+                            }
+                            
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                                ctx.drawImage(img, 0, 0, width, height);
+                                dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                            }
+                            
+                            addStickerToBoard(dataUrl, file.name);
+                        };
+                        img.src = dataUrl;
+                    } else {
+                        addStickerToBoard(dataUrl, file.name);
+                    }
+                };
+                reader.readAsDataURL(file);
+            } catch (err) {
+                console.error('Error processing sticker:', err);
+                showErrorMessage('Failed to add sticker');
+            }
+        };
+        input.click();
+    };
+
+    const addStickerToBoard = (dataUrl: string, fileName: string) => {
+        const newSticker: MoodBoardItem = {
+            id: `sticker-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            kind: 'sticker',
+            assetUrl: dataUrl,
+            alt: fileName,
+            x: Math.random() * 200 + 50,
+            y: Math.random() * 200 + 50,
+            rotation: (Math.random() - 0.5) * 10,
+            scale: 1,
+            zIndex: Math.max(...moodBoardPosts.map(p => p.zIndex), 0) + 1,
+            isFeatured: false
+        };
+
+        const updatedItems = [...moodBoardPosts, newSticker];
+        setMoodBoardPosts(updatedItems);
+
+        if (currentUser) {
+            updateUserProfile(currentUser.uid, {
+                moodBoardConfig: {
+                    posts: updatedItems,
+                    panelOffset
+                }
+            }).catch(err => console.error('Failed to save sticker:', err));
+        }
+        showSuccessMessage('Sticker added!');
+    };
+
+    const handleDeleteItem = (itemId: string) => {
+        const updatedItems = moodBoardPosts.filter(p => p.id !== itemId);
+        setMoodBoardPosts(updatedItems);
+        setSelectedItemId(null);
+
+        if (currentUser) {
+            updateUserProfile(currentUser.uid, {
+                moodBoardConfig: {
+                    posts: updatedItems,
+                    panelOffset
+                }
+            }).catch(err => console.error('Failed to delete item:', err));
+        }
+    };
+
+    const handleDuplicateItem = (itemId: string) => {
+        const item = moodBoardPosts.find(p => p.id === itemId);
+        if (!item) return;
+
+        const duplicated: MoodBoardItem = {
+            ...item,
+            id: `${item.kind}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            x: item.x + 20,
+            y: item.y + 20,
+            zIndex: Math.max(...moodBoardPosts.map(p => p.zIndex), 0) + 1
+        };
+
+        const updatedItems = [...moodBoardPosts, duplicated];
+        setMoodBoardPosts(updatedItems);
+
+        if (currentUser) {
+            updateUserProfile(currentUser.uid, {
+                moodBoardConfig: {
+                    posts: updatedItems,
+                    panelOffset
+                }
+            }).catch(err => console.error('Failed to duplicate item:', err));
+        }
     };
 
     const handleBoardPointerDown = (e: React.PointerEvent) => {
@@ -1129,6 +1362,116 @@ export function Profile() {
                                         />
                                     );
                                 })}
+                    <div className="relative min-h-[500px] h-[600px] bg-slate-50 dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 touch-none">
+                        <div 
+                            className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                            style={{ 
+                                backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)', 
+                                backgroundSize: '20px 20px',
+                                backgroundPosition: `${panelOffset.x}px ${panelOffset.y}px`
+                            }}
+                            onPointerDown={handleBoardPointerDown}
+                            onPointerMove={handleBoardPointerMove}
+                            onPointerUp={handleBoardPointerUp}
+                            onClick={() => setSelectedItemId(null)}
+                        />
+                        
+                        <div style={{ transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)` }}>
+                            {moodBoardPosts.map(config => {
+                                const post = config.kind === 'post' && config.postId ? userPosts.find(p => p.id === config.postId) : null;
+                                
+                                // Filter logic for posts
+                                if (config.kind === 'post' && activeFilter !== 'all' && !filteredPosts.find(p => p.id === config.postId)) return null;
+
+                                return (
+                                    <DraggablePostCard
+                                        key={config.id}
+                                        post={post}
+                                        config={config}
+                                        isOwner={currentUser?.uid === profile?.uid}
+                                        onUpdate={handlePostUpdate}
+                                        onInteract={() => {
+                                             if (config.kind === 'post' && config.postId) {
+                                                 const idx = filteredPosts.findIndex(p => p.id === config.postId);
+                                                 if (idx !== -1) openPostViewer(idx);
+                                             }
+                                        }}
+                                        maxZ={Math.max(...moodBoardPosts.map(p => p.zIndex), 0)}
+                                        onBringToFront={() => handleBringToFront(config.id)}
+                                        isSelected={selectedItemId === config.id}
+                                        onSelect={(selected) => setSelectedItemId(selected ? config.id : null)}
+                                    />
+                                );
+                            })}
+                        </div>
+                        
+                        {currentUser?.uid === profile?.uid && (
+                            <div className="absolute top-4 left-4 right-4 z-20 flex flex-col sm:flex-row sm:items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setDesignMode(!designMode)}
+                                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-colors ${designMode ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600'}`}
+                                    >
+                                        {designMode ? '✓ Design Mode' : 'Design Mode'}
+                                    </button>
+                                    <button
+                                        onClick={handleAddSticker}
+                                        className="px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                        title="Add custom sticker"
+                                    >
+                                        + Sticker
+                                    </button>
+                                </div>
+                                <div className="ml-auto flex items-center gap-2">
+                                    {selectedItemId && (
+                                        <>
+                                            <button
+                                                onClick={() => handleSendToBack(selectedItemId)}
+                                                className="px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                                title="Send to back"
+                                            >
+                                                ↓ Back
+                                            </button>
+                                            <button
+                                                onClick={() => handleBringToFront(selectedItemId)}
+                                                className="px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                                title="Bring to front"
+                                            >
+                                                ↑ Front
+                                            </button>
+                                            <button
+                                                onClick={() => handleDuplicateItem(selectedItemId)}
+                                                className="px-3 py-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                                                title="Duplicate item"
+                                            >
+                                                📋 Copy
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteItem(selectedItemId)}
+                                                className="px-3 py-2 rounded-lg text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-200 dark:hover:bg-red-800 transition-colors"
+                                                title="Delete item"
+                                            >
+                                                🗑 Delete
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={saveMoodBoard}
+                                        disabled={saveLoading}
+                                        className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                    >
+                                        <Save size={14} /> Save
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentUser?.uid === profile?.uid && moodBoardPosts.length > 0 && !profile?.moodBoardConfig && (
+                            <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
+                                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-3 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+                                    <p className="font-bold text-sm">Mood Board Mode</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Drag posts to arrange. Click to select, then use controls above.</p>
+                                </div>
                             </div>
                             
                             {currentUser?.uid === profile?.uid && (

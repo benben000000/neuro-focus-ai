@@ -60,6 +60,23 @@ export interface BoardStyle {
     backgroundTexture?: 'none' | 'paper' | 'gradient' | 'dotted';
     showGrid?: boolean;
     noiseLevel?: number; // 0-100
+// Mood board item with transforms and sticker support
+export type MoodBoardItemKind = 'post' | 'sticker';
+
+export interface MoodBoardItem {
+    id: string; // postId for posts, generated id for stickers
+    kind: MoodBoardItemKind;
+    postId?: string; // Only for kind='post'
+    // Sticker-specific fields
+    assetUrl?: string; // URL or data URL for sticker image
+    alt?: string; // Fallback description for sticker
+    // Transform fields
+    x: number;
+    y: number;
+    rotation: number; // degrees, -30 to 30
+    scale: number; // 0.5 to 2
+    zIndex: number;
+    isFeatured?: boolean;
 }
 
 export interface UserProfile {
@@ -89,15 +106,7 @@ export interface UserProfile {
     hasCompletedOnboarding?: boolean;
     moodBoardLayout?: MoodBoardLayout;
     moodBoardConfig?: {
-        posts: {
-            postId: string;
-            x: number;
-            y: number;
-            rotation: number;
-            scale: number;
-            zIndex: number;
-            isFeatured?: boolean;
-        }[];
+        posts: MoodBoardItem[];
         panelOffset?: { x: number; y: number };
         boardStyle?: BoardStyle;
     };
@@ -156,8 +165,15 @@ export interface ChatMessage {
     id: string;
     senderId: string;
     senderName: string;
+    senderPhoto?: string;
     content: string;
     createdAt: number;
+    reactions?: Record<string, string[]>; // emoji -> array of user IDs
+    editedAt?: number;
+    deletedAt?: number;
+    isDeleted?: boolean;
+    pinned?: boolean;
+    readBy?: string[]; // List of user IDs who have read this message
 }
 
 export interface Story {
@@ -800,6 +816,137 @@ export const subscribeToUserChats = (userId: string, callback: (chats: ChatRoom[
         } as ChatRoom));
         callback(chats);
     });
+};
+
+export const editChatMessage = async (chatId: string, messageId: string, newContent: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, {
+        content: newContent,
+        editedAt: Date.now()
+    });
+};
+
+export const deleteChatMessage = async (chatId: string, messageId: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, {
+        isDeleted: true,
+        deletedAt: Date.now(),
+        content: '[message removed]'
+    });
+};
+
+export const toggleChatReaction = async (chatId: string, messageId: string, emoji: string, userId: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    
+    await runTransaction(db, async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists()) return;
+        
+        const message = messageDoc.data() as ChatMessage;
+        const reactions = message.reactions || {};
+        const emojiReactors = reactions[emoji] || [];
+        
+        if (emojiReactors.includes(userId)) {
+            // Remove reaction
+            const updatedReactors = emojiReactors.filter(id => id !== userId);
+            if (updatedReactors.length === 0) {
+                delete reactions[emoji];
+            } else {
+                reactions[emoji] = updatedReactors;
+            }
+        } else {
+            // Add reaction
+            reactions[emoji] = [...emojiReactors, userId];
+        }
+        
+        transaction.update(messageRef, { reactions });
+    });
+};
+
+export const pinChatMessage = async (chatId: string, messageId: string, shouldPin: boolean): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(messageRef, { pinned: shouldPin });
+};
+
+export const setChatReadReceipt = async (chatId: string, messageId: string, userId: string): Promise<void> => {
+    const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+    
+    await runTransaction(db, async (transaction) => {
+        const messageDoc = await transaction.get(messageRef);
+        if (!messageDoc.exists()) return;
+        
+        const message = messageDoc.data() as ChatMessage;
+        const readBy = message.readBy || [];
+        
+        if (!readBy.includes(userId)) {
+            transaction.update(messageRef, { readBy: [...readBy, userId] });
+        }
+    });
+};
+
+export const setChatTypingState = async (chatId: string, userId: string, isTyping: boolean): Promise<void> => {
+    const typingRef = doc(db, 'chats', chatId, 'typingStates', userId);
+    if (isTyping) {
+        await setDoc(typingRef, {
+            userId,
+            timestamp: Date.now()
+        });
+    } else {
+        await deleteDoc(typingRef).catch(() => {/* ignore if not exists */});
+    }
+};
+
+export const subscribeToChatTypingStates = (chatId: string, callback: (typingUsers: string[]) => void): (() => void) => {
+    const typingRef = collection(db, 'chats', chatId, 'typingStates');
+    const now = Date.now();
+    const timeout = 3000; // 3 seconds
+
+    return onSnapshot(typingRef, (snapshot) => {
+        const typingUsers = snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    userId: data.userId,
+                    timestamp: data.timestamp
+                };
+            })
+            .filter(user => now - user.timestamp < timeout)
+            .map(user => user.userId);
+        
+        callback(typingUsers);
+    });
+};
+
+export const searchChatMessages = async (chatId: string, searchTerm: string, limit: number = 20): Promise<ChatMessage[]> => {
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    
+    try {
+        const q = query(
+            messagesRef,
+            where('content', '>=', searchTerm),
+            where('content', '<=', searchTerm + '\uf8ff'),
+            orderBy('content'),
+            orderBy('createdAt', 'desc'),
+            limit
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as ChatMessage));
+    } catch (error) {
+        // Fallback to client-side filtering if query fails
+        const allMessagesQuery = query(messagesRef, orderBy('createdAt', 'desc'), limit(100));
+        const allSnapshot = await getDocs(allMessagesQuery);
+        const allMessages = allSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as ChatMessage));
+        
+        return allMessages
+            .filter(msg => msg.content.toLowerCase().includes(searchTerm.toLowerCase()))
+            .slice(0, limit);
+    }
 };
 
 export const getAllUsers = async () => {

@@ -138,6 +138,7 @@ export interface SocialComment {
     authorIsVerified?: boolean;
     content: string;
     createdAt: number;
+    reactions?: Record<string, string[]>; // emoji -> array of user IDs
 }
 
 export interface ChatMessage {
@@ -423,7 +424,8 @@ export const addComment = async (
             authorPhoto: user.photoURL || '',
             authorIsVerified: user.isVerified || false,
             content: text,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            reactions: {}
         });
 
         const parentRef = doc(db, collectionName, parentId);
@@ -452,6 +454,47 @@ export const deleteComment = async (
     } catch (error: any) {
         console.error('deleteComment failed', error);
         throw new Error(error?.message || 'Failed to delete comment.');
+    }
+};
+
+export const toggleCommentReaction = async (
+    parentId: string,
+    collectionName: 'posts' | 'stories',
+    commentId: string,
+    emoji: string,
+    userId: string
+) => {
+    try {
+        const commentRef = doc(db, collectionName, parentId, 'comments', commentId);
+        
+        await runTransaction(db, async (transaction) => {
+            const commentSnap = await transaction.get(commentRef);
+            if (!commentSnap.exists()) {
+                throw new Error('Comment not found');
+            }
+            
+            const comment = commentSnap.data() as SocialComment;
+            const reactions = comment.reactions || {};
+            const emojiReactors = reactions[emoji] || [];
+            
+            if (emojiReactors.includes(userId)) {
+                // Remove reaction
+                const updatedReactors = emojiReactors.filter(id => id !== userId);
+                if (updatedReactors.length === 0) {
+                    delete reactions[emoji];
+                } else {
+                    reactions[emoji] = updatedReactors;
+                }
+            } else {
+                // Add reaction
+                reactions[emoji] = [...emojiReactors, userId];
+            }
+            
+            transaction.update(commentRef, { reactions });
+        });
+    } catch (error: any) {
+        console.error('toggleCommentReaction failed', error);
+        throw new Error(error?.message || 'Failed to toggle reaction.');
     }
 };
 

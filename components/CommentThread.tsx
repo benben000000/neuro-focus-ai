@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SocialComment, addComment, deleteComment, subscribeToComments } from '../services/social';
+import { SocialComment, addComment, deleteComment, subscribeToComments, toggleCommentReaction } from '../services/social';
 import { useAuth } from '../contexts/AuthContext';
-import { Send, Trash2, X } from 'lucide-react';
+import { useProfile } from '../contexts/ProfileContext';
+import { Send, Trash2, X, Smile } from 'lucide-react';
 
 interface CommentThreadProps {
     parentId: string;
@@ -13,11 +14,16 @@ interface CommentThreadProps {
 
 export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentType, isOwner, onClose, className = '' }) => {
     const { currentUser } = useAuth();
+    const { profile } = useProfile();
     const [comments, setComments] = useState<SocialComment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [reactionPickerOpen, setReactionPickerOpen] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Available reactions
+    const availableReactions = ['👍', '🔥', '👏', '💡', '❤️'];
 
     useEffect(() => {
         const unsubscribe = subscribeToComments(parentId, parentType, (newComments) => {
@@ -26,6 +32,21 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentTy
         });
         return () => unsubscribe();
     }, [parentId, parentType]);
+
+    // Close reaction picker when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (reactionPickerOpen) {
+                const target = event.target as Element;
+                if (!target.closest('.reaction-picker-container')) {
+                    setReactionPickerOpen(null);
+                }
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [reactionPickerOpen]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,10 +68,14 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentTy
         setSubmitting(true);
         
         try {
+            // Use profile display name if available, fallback to auth display name or email
+            const displayName = profile?.displayName || currentUser.displayName || currentUser.email || 'User';
+            
             await addComment(parentId, parentType, commentText, {
                 uid: currentUser.uid,
-                displayName: currentUser.displayName || 'User',
-                photoURL: currentUser.photoURL || undefined
+                displayName,
+                photoURL: currentUser.photoURL || undefined,
+                isVerified: profile?.isVerified || false
             });
             scrollToBottom();
         } catch (error) {
@@ -68,6 +93,25 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentTy
         } catch (error) {
             console.error('Failed to delete comment:', error);
         }
+    };
+
+    const handleReaction = async (commentId: string, emoji: string) => {
+        if (!currentUser) return;
+        
+        try {
+            await toggleCommentReaction(parentId, parentType, commentId, emoji, currentUser.uid);
+            setReactionPickerOpen(null); // Close picker after selection
+        } catch (error) {
+            console.error('Failed to toggle reaction:', error);
+        }
+    };
+
+    const hasUserReacted = (comment: SocialComment, emoji: string) => {
+        return comment.reactions?.[emoji]?.includes(currentUser?.uid || '') || false;
+    };
+
+    const getReactionCount = (comment: SocialComment, emoji: string) => {
+        return comment.reactions?.[emoji]?.length || 0;
     };
 
     const timeAgo = (timestamp: number) => {
@@ -104,16 +148,67 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentTy
                                     <img src={comment.authorPhoto} className="w-full h-full object-cover" alt={comment.authorName} />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                        {comment.authorName[0]}
+                                        {comment.authorName?.[0] || 'A'}
                                     </div>
                                 )}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-baseline gap-2">
-                                    <span className="font-bold text-sm text-slate-900 dark:text-white truncate">{comment.authorName}</span>
+                                    <span className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                                        {comment.authorName || 'Anonymous'}
+                                    </span>
                                     <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo(comment.createdAt)}</span>
                                 </div>
                                 <p className="text-sm text-slate-700 dark:text-slate-300 break-words leading-relaxed">{comment.content}</p>
+                                
+                                {/* Reactions */}
+                                <div className="flex items-center gap-2 mt-2">
+                                    {/* Reaction chips */}
+                                    {Object.entries(comment.reactions || {}).map(([emoji, reactors]) => (
+                                        <button
+                                            key={emoji}
+                                            onClick={() => currentUser && handleReaction(comment.id, emoji)}
+                                            disabled={!currentUser}
+                                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                                                hasUserReacted(comment, emoji)
+                                                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                                            } ${!currentUser ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        >
+                                            <span>{emoji}</span>
+                                            <span>{reactors.length}</span>
+                                        </button>
+                                    ))}
+                                    
+                                    {/* Reaction picker button */}
+                                    {currentUser && (
+                                        <div className="relative reaction-picker-container">
+                                            <button
+                                                onClick={() => setReactionPickerOpen(reactionPickerOpen === comment.id ? null : comment.id)}
+                                                className="text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                                title="Add reaction"
+                                            >
+                                                <Smile size={14} />
+                                            </button>
+                                            
+                                            {/* Reaction picker dropdown */}
+                                            {reactionPickerOpen === comment.id && (
+                                                <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg p-2 flex gap-1 z-10">
+                                                    {availableReactions.map(emoji => (
+                                                        <button
+                                                            key={emoji}
+                                                            onClick={() => handleReaction(comment.id, emoji)}
+                                                            className="text-lg hover:bg-slate-100 dark:hover:bg-slate-700 rounded p-1 transition-colors"
+                                                            title={emoji}
+                                                        >
+                                                            {emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             {(isOwner || currentUser?.uid === comment.authorId) && (
                                 <button 
@@ -137,7 +232,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ parentId, parentTy
                             <img src={currentUser.photoURL} className="w-full h-full object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-xs font-bold text-slate-500">
-                                {currentUser.displayName?.[0] || 'U'}
+                                {(profile?.displayName || currentUser.displayName || currentUser.email || 'User')[0]?.toUpperCase() || 'U'}
                             </div>
                         )}
                     </div>

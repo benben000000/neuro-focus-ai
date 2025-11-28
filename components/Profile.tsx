@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { useActivity } from '../contexts/ActivityContext';
-import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, mergeMoodBoardLayout, MoodBoardLayout, subscribeToPresence, UserPresence } from '../services/social';
+import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, mergeMoodBoardLayout, MoodBoardLayout, subscribeToPresence, UserPresence, BoardStyle, getDefaultBoardStyle, generateTexturePattern } from '../services/social';
 import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
 import { MediaCarousel } from './MediaCarousel';
-import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move, Loader } from 'lucide-react';
+import { Edit2, Save, Award, Clock, BookOpen, AlertCircle, CheckCircle, X, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, BadgeCheck, Users, Shield, Layout, GripHorizontal, Star, Sparkles, Calendar, Move, Loader, Palette, Grid3x3, Texture } from 'lucide-react';
 import { CommentThread } from './CommentThread';
 import { Toggle } from './ui/Toggle';
 
@@ -215,6 +215,8 @@ export function Profile() {
     const [isDraggingBoard, setIsDraggingBoard] = useState(false);
     const [boardDragStart, setBoardDragStart] = useState({ x: 0, y: 0 });
     const moodBoardRef = useRef<HTMLDivElement>(null);
+    const [boardStyle, setBoardStyle] = useState<BoardStyle>(getDefaultBoardStyle());
+    const [showStylePanel, setShowStylePanel] = useState(false);
 
     useEffect(() => {
         if (layoutMode === 'moodboard' && userPosts.length > 0) {
@@ -241,6 +243,13 @@ export function Profile() {
 
                 setMoodBoardPosts([...validConfigPosts, ...additionalLayout]);
                 setPanelOffset(profile.moodBoardConfig.panelOffset || { x: 0, y: 0 });
+                
+                // Load board style from config
+                if (profile.moodBoardConfig.boardStyle) {
+                    setBoardStyle(profile.moodBoardConfig.boardStyle);
+                } else {
+                    setBoardStyle(getDefaultBoardStyle());
+                }
             } else {
                 // Initialize default layout
                 const initialLayout = userPosts.slice(0, 20).map((post, i) => ({
@@ -253,6 +262,7 @@ export function Profile() {
                     isFeatured: false
                 }));
                 setMoodBoardPosts(initialLayout);
+                setBoardStyle(getDefaultBoardStyle());
             }
         }
     }, [layoutMode, profile, userPosts]);
@@ -264,7 +274,8 @@ export function Profile() {
             await updateUserProfile(currentUser.uid, {
                 moodBoardConfig: {
                     posts: moodBoardPosts,
-                    panelOffset
+                    panelOffset,
+                    boardStyle
                 }
             });
             await refreshProfile();
@@ -1013,64 +1024,134 @@ export function Profile() {
                 </div>
 
                 {layoutMode === 'moodboard' ? (
-                    <div className="relative min-h-[500px] h-[600px] bg-slate-50 dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 touch-none">
-                        <div 
-                            className="absolute inset-0 cursor-grab active:cursor-grabbing"
-                            style={{ 
-                                backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)', 
-                                backgroundSize: '20px 20px',
-                                backgroundPosition: `${panelOffset.x}px ${panelOffset.y}px`
-                            }}
-                            onPointerDown={handleBoardPointerDown}
-                            onPointerMove={handleBoardPointerMove}
-                            onPointerUp={handleBoardPointerUp}
-                        />
-                        
-                        <div style={{ transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)` }}>
-                            {moodBoardPosts.map(config => {
-                                const post = userPosts.find(p => p.id === config.postId);
-                                if (!post) return null;
-                                
-                                if (activeFilter !== 'all' && !filteredPosts.find(p => p.id === post.id)) return null;
-
-                                return (
-                                    <DraggablePostCard
-                                        key={config.postId}
-                                        post={post}
-                                        config={config}
-                                        isOwner={currentUser?.uid === profile?.uid}
-                                        onUpdate={handlePostUpdate}
-                                        onInteract={() => {
-                                             const idx = filteredPosts.findIndex(p => p.id === post.id);
-                                             if (idx !== -1) openPostViewer(idx);
-                                        }}
-                                        maxZ={Math.max(...moodBoardPosts.map(p => p.zIndex), 0)}
-                                        onBringToFront={() => handleBringToFront(config.postId)}
-                                    />
-                                );
-                            })}
-                        </div>
-                        
+                    <div className="space-y-3">
                         {currentUser?.uid === profile?.uid && (
-                            <div className="absolute top-4 right-4 z-10">
-                                <button
-                                    onClick={saveMoodBoard}
-                                    disabled={saveLoading}
-                                    className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
-                                >
-                                    <Save size={14} /> Save Board
-                                </button>
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center justify-between mb-4">
+                                    <button
+                                        onClick={() => setShowStylePanel(!showStylePanel)}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                                    >
+                                        <Palette size={18} />
+                                        <span className="text-sm font-medium">Board Style</span>
+                                    </button>
+                                </div>
+
+                                {showStylePanel && (
+                                    <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wide">Background Color</label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="color"
+                                                    value={boardStyle.backgroundColor || '#f8fafc'}
+                                                    onChange={(e) => setBoardStyle({ ...boardStyle, backgroundColor: e.target.value })}
+                                                    className="w-10 h-10 rounded-lg cursor-pointer border border-slate-300 dark:border-slate-600"
+                                                />
+                                                <div className="flex gap-2 flex-wrap">
+                                                    {['#ffffff', '#f1f5f9', '#e2e8f0', '#1e293b', '#0f172a'].map(color => (
+                                                        <button
+                                                            key={color}
+                                                            onClick={() => setBoardStyle({ ...boardStyle, backgroundColor: color })}
+                                                            className={`w-6 h-6 rounded-md border-2 transition-all ${boardStyle.backgroundColor === color ? 'border-indigo-500 scale-110' : 'border-slate-300 dark:border-slate-600'}`}
+                                                            style={{ backgroundColor: color }}
+                                                            title={color}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wide">Texture</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {(['none', 'dotted', 'paper', 'gradient'] as const).map(texture => (
+                                                    <button
+                                                        key={texture}
+                                                        onClick={() => setBoardStyle({ ...boardStyle, backgroundTexture: texture })}
+                                                        className={`px-3 py-2 rounded-lg text-xs font-medium transition-all border ${boardStyle.backgroundTexture === texture ? 'bg-indigo-100 dark:bg-indigo-900 border-indigo-500 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
+                                                    >
+                                                        {texture.charAt(0).toUpperCase() + texture.slice(1)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Show Grid</label>
+                                            <button
+                                                onClick={() => setBoardStyle({ ...boardStyle, showGrid: !boardStyle.showGrid })}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${boardStyle.showGrid ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                            >
+                                                <span
+                                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${boardStyle.showGrid ? 'translate-x-6' : 'translate-x-1'}`}
+                                                />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
-                        {currentUser?.uid === profile?.uid && moodBoardPosts.length > 0 && !profile?.moodBoardConfig && (
-                            <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
-                                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-3 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-                                    <p className="font-bold text-sm">Mood Board Mode</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Drag posts to arrange. Tap star to feature.</p>
-                                </div>
+                        <div className="relative min-h-[500px] h-[600px] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 touch-none" style={{ backgroundColor: boardStyle.backgroundColor }}>
+                            <div 
+                                className="absolute inset-0 cursor-grab active:cursor-grabbing"
+                                style={{ 
+                                    backgroundImage: (boardStyle.showGrid && boardStyle.backgroundTexture !== 'none') ? generateTexturePattern(boardStyle.backgroundTexture, document.documentElement.classList.contains('dark')) : 'none',
+                                    backgroundSize: boardStyle.backgroundTexture === 'dotted' ? '20px 20px' : 'auto',
+                                    backgroundPosition: boardStyle.backgroundTexture === 'dotted' ? `${panelOffset.x}px ${panelOffset.y}px` : 'auto'
+                                }}
+                                onPointerDown={handleBoardPointerDown}
+                                onPointerMove={handleBoardPointerMove}
+                                onPointerUp={handleBoardPointerUp}
+                            />
+                            
+                            <div style={{ transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)` }}>
+                                {moodBoardPosts.map(config => {
+                                    const post = userPosts.find(p => p.id === config.postId);
+                                    if (!post) return null;
+                                    
+                                    if (activeFilter !== 'all' && !filteredPosts.find(p => p.id === post.id)) return null;
+
+                                    return (
+                                        <DraggablePostCard
+                                            key={config.postId}
+                                            post={post}
+                                            config={config}
+                                            isOwner={currentUser?.uid === profile?.uid}
+                                            onUpdate={handlePostUpdate}
+                                            onInteract={() => {
+                                                 const idx = filteredPosts.findIndex(p => p.id === post.id);
+                                                 if (idx !== -1) openPostViewer(idx);
+                                            }}
+                                            maxZ={Math.max(...moodBoardPosts.map(p => p.zIndex), 0)}
+                                            onBringToFront={() => handleBringToFront(config.postId)}
+                                        />
+                                    );
+                                })}
                             </div>
-                        )}
+                            
+                            {currentUser?.uid === profile?.uid && (
+                                <div className="absolute top-4 right-4 z-10 flex gap-2">
+                                    <button
+                                        onClick={saveMoodBoard}
+                                        disabled={saveLoading}
+                                        className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                    >
+                                        <Save size={14} /> Save Board
+                                    </button>
+                                </div>
+                            )}
+
+                            {currentUser?.uid === profile?.uid && moodBoardPosts.length > 0 && !profile?.moodBoardConfig && (
+                                <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
+                                    <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-3 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+                                        <p className="font-bold text-sm">Mood Board Mode</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Drag posts to arrange. Tap star to feature.</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ) : loadingSaved ? (
                     <div className="py-10 text-center text-sm text-slate-500 dark:text-slate-400">

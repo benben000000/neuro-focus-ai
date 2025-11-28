@@ -1,17 +1,8 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Send, Smile, MoreVertical, Hash, AtSign, Loader2, BookOpen, BarChart2, Volume2, Plus } from 'lucide-react';
-import { GroupMessage } from '../../services/groups';
-import { UserProfile } from '../../services/social';
-import { ConversationNode, ConversationType } from '../../types';
-
-interface MessagePaneProps {
-    channelName?: string;
-    channelType?: ConversationType | 'text' | 'voice' | 'dm';
-    messages: GroupMessage[] | any[]; // any for DM compatibility if needed
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Send, Paperclip, Smile, MoreVertical, Hash, AtSign, Loader2, BookOpen, BarChart2, Volume2, Plus, MessageSquareX } from 'lucide-react';
 import { GroupMessage } from '../../services/groups';
 import { UserProfile } from '../../services/social';
+import { ConversationNode, ConversationType } from '../../types';
 import { MessageActionMenu } from './MessageActionMenu';
 import { ReactionBar } from './ReactionBar';
 import { TypingIndicator } from './TypingIndicator';
@@ -21,7 +12,7 @@ import { ReadReceipts } from './ReadReceipts';
 
 interface MessagePaneProps {
     channelName: string;
-    channelType?: 'text' | 'voice' | 'dm';
+    channelType?: ConversationType | 'text' | 'voice' | 'dm';
     messages: GroupMessage[] | any[];
     onSendMessage: (content: string) => void;
     onEditMessage?: (messageId: string, newContent: string) => void;
@@ -71,16 +62,12 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
     const effectiveMessagesEndRef = propsMessagesEndRef || localMessagesEndRef;
     const effectiveChannelType = conversation?.type || (channelType as any);
     const effectiveChannelName = conversation?.label || channelName || 'Chat';
-    participants = [],
-    isChatMessage = false
-}) => {
-    const [newMessage, setNewMessage] = useState('');
+
     const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
     const [editingContent, setEditingContent] = useState('');
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
     const [searchResults, setSearchResults] = useState<(GroupMessage | any)[]>([]);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
     const composerRef = useRef<HTMLInputElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -136,16 +123,6 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
         } else if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSubmit(e as any);
-        if (newMessage.trim()) {
-            if (editingMessageId) {
-                onEditMessage?.(editingMessageId, newMessage);
-                setEditingMessageId(null);
-                setEditingContent('');
-            } else {
-                onSendMessage(newMessage);
-            }
-            setNewMessage('');
-            onSetTypingState?.(false);
         }
     };
 
@@ -211,10 +188,6 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
                     </div>
                 )}
                 
-                {messages.map((msg: any, index: number) => {
-                    const showHeader = index === 0 || messages[index - 1].senderId !== msg.senderId || (msg.createdAt - messages[index-1].createdAt > 60000 * 5);
-                    
-
                 {displayMessages.map((msg, index) => {
                     const showHeader = index === 0 || displayMessages[index - 1].senderId !== msg.senderId || (msg.createdAt - displayMessages[index - 1].createdAt > 60000 * 5);
                     const isHighlighted = highlightedMessageId === msg.id;
@@ -301,13 +274,11 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
                         </div>
                     );
                 })}
-                <div ref={effectiveMessagesEndRef} />
-                </div>
-
+                
                 {/* Typing Indicator */}
                 <TypingIndicator typingUserIds={typingUserIds} />
 
-                <div ref={messagesEndRef} />
+                <div ref={effectiveMessagesEndRef} />
             </div>
 
             {/* Input Area */}
@@ -338,30 +309,24 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
                             ref={composerRef}
                             type="text"
                             value={effectiveNewMessage}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => effectiveSetNewMessage(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                effectiveSetNewMessage(e.target.value);
+                                handleComposerChange(e);
+                            }}
                             onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e as any)}
-                            placeholder={`Message ${effectiveChannelType === 'dm' ? '@' : '#'}${effectiveChannelName}`}
-                            value={newMessage}
-                            onChange={handleComposerChange}
                             onFocus={handleComposerFocus}
                             onBlur={handleComposerBlur}
-                            placeholder={`Message #${channelName}`}
+                            placeholder={`Message ${effectiveChannelType === 'dm' ? '@' : '#'}${effectiveChannelName}`}
                             className="flex-1 bg-transparent border-none outline-none text-slate-900 dark:text-white px-2 py-1 placeholder-slate-500"
                             disabled={isLoading || isSending}
                         />
                         <button type="button" className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                             <Smile size={20} />
-                         </button>
+                        </button>
                         {effectiveNewMessage.trim() && (
                             <button
                                 type="submit"
                                 disabled={isLoading || isSending}
-                                className="p-2 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 transition-colors"
-                        </button>
-                        {newMessage.trim() && (
-                            <button
-                                type="submit"
-                                disabled={isLoading}
                                 className="p-2 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors disabled:opacity-50"
                             >
                                 {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}

@@ -198,7 +198,6 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                 title: listeningToTitle.trim(),
                 artist: listeningToArtist.trim() || undefined,
                 source: undefined
-                artist: listeningToArtist.trim() || undefined
             } : undefined;
 
             if (mode === 'story' && mediaPayload) {
@@ -454,34 +453,6 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                                         className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
                                     />
                                 </div>
-
-                            {/* Location */}
-                            <input
-                                type="text"
-                                value={location}
-                                onChange={(e) => setLocation(e.target.value)}
-                                placeholder="📍 Add location (optional)"
-                                className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                            />
-
-                            {/* Listening To */}
-                            <div className="space-y-2">
-                                <input
-                                    type="text"
-                                    value={listeningToTitle}
-                                    onChange={(e) => setListeningToTitle(e.target.value)}
-                                    placeholder="🎧 Now listening to... (optional)"
-                                    className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                />
-                                {listeningToTitle && (
-                                    <input
-                                        type="text"
-                                        value={listeningToArtist}
-                                        onChange={(e) => setListeningToArtist(e.target.value)}
-                                        placeholder="Artist name (optional)"
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    />
-                                )}
                             </div>
                         </>
                     )}

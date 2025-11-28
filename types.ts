@@ -176,3 +176,75 @@ export interface ConversationNode {
   lastMessageTime?: number | undefined;
   participants?: string[] | undefined; // for DMs
 }
+
+// --- NOTE SUMMARIZER TYPES ---
+
+export type DetectedSubject = 
+  | 'science_bio'
+  | 'history_lit'
+  | 'math'
+  | 'psych_soc'
+  | 'general';
+
+export interface SubjectDetectionResult {
+  subject: DetectedSubject;
+  confidence: number;
+}
+
+export interface KeyConcept {
+  term: string;
+  definition: string;
+  importance: 'high' | 'medium' | 'low';
+}
+
+export interface ConceptMapNode {
+  id: string;
+  label: string;
+  category?: string;
+}
+
+export interface ConceptLink {
+  source: string;
+  target: string;
+  relationship: string;
+}
+
+export interface ActiveRecallQuestionSummary {
+  id: string;
+  question: string;
+  expectedAnswer: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+}
+
+export interface SpacedRepetitionSignal {
+  reviewInDays: number;
+  reason: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface ElaborationBlock {
+  topic: string;
+  elaboration: string;
+  connections: string[];
+}
+
+export interface SummarySection {
+  heading: string;
+  content: string;
+  keyTakeaways: string[];
+}
+
+export interface NoteSummary {
+  subject: DetectedSubject;
+  title: string;
+  sections: SummarySection[];
+  keyConcepts: KeyConcept[];
+  conceptMap: {
+    nodes: ConceptMapNode[];
+    links: ConceptLink[];
+  };
+  activeRecallQuestions: ActiveRecallQuestionSummary[];
+  spacedRepetitionSignals: SpacedRepetitionSignal[];
+  elaborationBlocks: ElaborationBlock[];
+  reviewPoints: string[];
+}

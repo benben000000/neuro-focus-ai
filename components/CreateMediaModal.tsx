@@ -196,6 +196,8 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
             
             const listeningToPayload = listeningToTitle.trim() ? {
                 title: listeningToTitle.trim(),
+                artist: listeningToArtist.trim() || undefined,
+                source: undefined
                 artist: listeningToArtist.trim() || undefined
             } : undefined;
 
@@ -416,6 +418,42 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                                 placeholder="Write a caption..."
                                 className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 outline-none resize-none h-24"
                             />
+                            
+                            {/* Location Input */}
+                            <div>
+                                <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Location</label>
+                                <input
+                                    type="text"
+                                    value={location}
+                                    onChange={(e) => setLocation(e.target.value.slice(0, 100))}
+                                    placeholder="Add location (optional)"
+                                    maxLength={100}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">{location.length}/100</p>
+                            </div>
+                            
+                            {/* Currently Listening To */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Currently Listening To</label>
+                                <div className="space-y-2">
+                                    <input
+                                        type="text"
+                                        value={listeningToTitle}
+                                        onChange={(e) => setListeningToTitle(e.target.value.slice(0, 100))}
+                                        placeholder="Song title (optional)"
+                                        maxLength={100}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={listeningToArtist}
+                                        onChange={(e) => setListeningToArtist(e.target.value.slice(0, 100))}
+                                        placeholder="Artist name (optional)"
+                                        maxLength={100}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border-0 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                                    />
+                                </div>
 
                             {/* Location */}
                             <input
@@ -456,7 +494,7 @@ export function CreateMediaModal({ isOpen, onClose, type: initialType, onPostCre
                         disabled={loading || (mode === 'story' && media.length === 0) || (mode === 'post' && !content.trim() && media.length === 0)}
                         className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                        {loading ? 'Sharing...' : 'Share'} <Send size={16} />
+                        {loading ? (isEditingMode ? 'Saving...' : 'Sharing...') : (isEditingMode ? 'Save Changes' : 'Share')} <Send size={16} />
                     </button>
                 </div>
             </div>

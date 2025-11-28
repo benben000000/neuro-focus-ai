@@ -135,6 +135,11 @@ export interface SocialPost {
     // New rich media array for carousels
     media?: ComposerMedia[];
     location?: string; // Optional location tag
+    listeningTo?: {
+        title: string;
+        artist?: string;
+        source?: string;
+    };
     type: 'status' | 'progress';
     // Optional semantic metadata used for profile filters & overlays
     category?: 'study' | 'notes' | 'highlights' | 'other';
@@ -636,6 +641,21 @@ export const fetchSavedPosts = async (userId: string) => {
             id: snap.id,
             ...snap.data()
         } as SocialPost));
+};
+
+export const reportPost = async (postId: string, reporterId: string, reason?: string) => {
+    try {
+        const reportsRef = collection(db, 'reports');
+        await addDoc(reportsRef, {
+            postId,
+            reporterId,
+            reason: reason || '',
+            createdAt: Date.now()
+        });
+    } catch (error: any) {
+        console.error('reportPost failed', error);
+        throw new Error(error?.message || 'Failed to report post.');
+    }
 };
 
 // --- SHARING FUNCTIONS ---

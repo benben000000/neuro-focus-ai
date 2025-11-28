@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
+import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser, subscribeToPresence, UserPresence, deletePost, reportPost } from '../services/social';
+import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, BadgeCheck, Flag, Copy, Edit2, Trash2 } from 'lucide-react';
 import { subscribeToFeed, SocialPost, toggleLike, searchUsers, sendFriendRequest, getFriendSuggestions, UserProfile, toggleSavePost, isPostSaved, followUser, unfollowUser, subscribeToPresence, UserPresence, createOrGetDirectChat, deletePost } from '../services/social';
 import { MessageCircle, Heart, Share2, Bookmark, MoreHorizontal, Search, UserPlus, PlusSquare, BadgeCheck, Copy, Edit2, Trash2 } from 'lucide-react';
 import { StoryTray } from './StoryTray';
@@ -85,6 +87,23 @@ const UserSuggestionRow: React.FC<{ user: UserProfile, currentUserProfile: UserP
 };
 
 export function SocialFeed() {
+    const { currentUser } = useAuth();
+    const { profile } = useProfile();
+    const [posts, setPosts] = useState<SocialPost[]>([]);
+    const [optimisticPosts, setOptimisticPosts] = useState<SocialPost[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [createMode, setCreateMode] = useState<'post' | 'story'>('post');
+    const [shareModalContent, setShareModalContent] = useState<{ type: 'post' | 'story', id: string } | null>(null);
+    const [activeCommentThreadId, setActiveCommentThreadId] = useState<string | null>(null);
+    const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
+    const [editingPost, setEditingPost] = useState<SocialPost | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Sidebar states
+    const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
      const navigate = useNavigate();
      const { currentUser } = useAuth();
      const { profile } = useProfile();
@@ -209,6 +228,17 @@ export function SocialFeed() {
         }
     };
 
+    const handleReportPost = async (postId: string) => {
+        if (!currentUser) return;
+        try {
+            await reportPost(postId, currentUser.uid);
+            alert('Post reported. Thank you for helping keep our community safe.');
+            setOpenMenuPostId(null);
+        } catch (error) {
+            alert('Failed to report post. Please try again.');
+        }
+    };
+
     const handleCopyLink = (postId: string) => {
         const url = `${window.location.origin}/community?post=${postId}`;
         if (navigator.clipboard) {
@@ -257,6 +287,11 @@ export function SocialFeed() {
                             <article key={post.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                                 {/* Post Header */}
                                 <div className="p-3 flex items-center justify-between relative">
+                                    <div className="flex items-center gap-3 flex-1">
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
+                                            <div className="w-full h-full rounded-full border-2 border-white dark:border-slate-900 overflow-hidden bg-white">
+                                                {post.authorPhoto ? (
+                                                    <img src={post.authorPhoto} className="w-full h-full object-cover" />
                                     <ProfilePreviewTrigger userId={post.authorId}>
                                         <div className="flex items-center gap-3 flex-1">
                                             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
@@ -320,6 +355,64 @@ export function SocialFeed() {
                                                     </>
                                                 )}
                                             </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-sm text-slate-900 dark:text-white hover:underline cursor-pointer flex items-center gap-1">
+                                                {post.authorName}
+                                                {post.authorIsVerified && <BadgeCheck size={14} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
+                                            </h3>
+                                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                {post.location && <span>📍 {post.location}</span>}
+                                                {post.listeningTo && post.location && <span>•</span>}
+                                                {post.listeningTo && <span>🎧 {post.listeningTo.title}{post.listeningTo.artist ? ` — ${post.listeningTo.artist}` : ''}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="relative" ref={menuRef}>
+                                        <button
+                                            onClick={() => setOpenMenuPostId(openMenuPostId === post.id ? null : post.id)}
+                                            className="text-slate-500 hover:text-slate-900 dark:hover:text-white p-1"
+                                        >
+                                            <MoreHorizontal size={20} />
+                                        </button>
+
+                                        {/* Action Menu Popover */}
+                                        {openMenuPostId === post.id && (
+                                            <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-50 min-w-[180px] py-1">
+                                                {currentUser?.uid === post.authorId ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleEditPost(post)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            <Edit2 size={16} /> Edit post
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeletePost(post.id)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2"
+                                                        >
+                                                            <Trash2 size={16} /> Delete post
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleCopyLink(post.id)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                                                        >
+                                                            <Copy size={16} /> Copy link
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleReportPost(post.id)}
+                                                            className="w-full px-4 py-2 text-left text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-2"
+                                                        >
+                                                            <Flag size={16} /> Report post
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                         )}
                                     </div>
                                 </div>

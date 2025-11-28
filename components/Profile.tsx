@@ -181,6 +181,7 @@ export function Profile() {
     const { stats: progressSummary } = useActivity();
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
+    const [editUsername, setEditUsername] = useState('');
     const [editBio, setEditBio] = useState('');
     const [editPhotoURL, setEditPhotoURL] = useState('');
     const [saveLoading, setSaveLoading] = useState(false);
@@ -354,6 +355,7 @@ export function Profile() {
 
     const hydrateEditFields = (profileData: any) => {
         setEditName(profileData.displayName || '');
+        setEditUsername(profileData.username || '');
         setEditBio(profileData.bio || '');
         setEditPhotoURL(profileData.photoURL || '');
     };
@@ -538,8 +540,9 @@ export function Profile() {
             return;
         }
 
-        const updatedProfile = {
+        const updatedProfile: Partial<UserProfile> = {
             displayName: trimmedName,
+            username: editUsername.trim(),
             bio: editBio,
             photoURL: editPhotoURL || ''
         };
@@ -763,6 +766,15 @@ export function Profile() {
                                         <p className="text-sm text-red-500 dark:text-red-400">Display name is required.</p>
                                     )}
                                 </div>
+                                <div className="space-y-1">
+                                    <input
+                                        value={editUsername}
+                                        onChange={(e) => setEditUsername(e.target.value)}
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1 text-sm"
+                                        placeholder="Username (optional)"
+                                    />
+                                    <p className="text-xs text-slate-500">@{editUsername || 'username'}</p>
+                                </div>
                                 <textarea
                                     value={editBio}
                                     onChange={(e) => setEditBio(e.target.value)}
@@ -776,6 +788,9 @@ export function Profile() {
                                     {profile?.displayName}
                                     {profile?.isVerified && <BadgeCheck size={24} className="text-blue-500 fill-blue-100 dark:fill-blue-900" />}
                                 </h1>
+                                {profile?.username && (
+                                    <p className="text-sm text-slate-500 mb-2">@{profile.username}</p>
+                                )}
                                 <p className="text-slate-500 dark:text-slate-400 max-w-xl">{profile?.bio || "No bio yet."}</p>
                             </div>
                         )}

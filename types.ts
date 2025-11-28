@@ -153,3 +153,7 @@ export interface DailyPhrase {
   difficulty: 'Easy' | 'Medium' | 'Hard';
   practiced: boolean;
 }
+
+export interface VoiceSessionConfig {
+  targetLanguage?: string;
+}

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, GraduationCap, Mic, CheckCircle2, X, RefreshCcw } from 'lucide-react';
-import { Message, FileAttachment, LiveFlashcardData, LiveQuizData } from '../types';
+import { Message, FileAttachment, LiveFlashcardData, LiveQuizData, VoiceSessionConfig } from '../types';
 import { sendMessageToGemini, getChatSession } from '../services/gemini';
 import { FileUploader } from './FileUploader';
 import { Button } from './ui/Button';
@@ -10,6 +10,7 @@ import { useActivity } from '../contexts/ActivityContext';
 interface ChatTutorProps {
   attachments: FileAttachment[];
   setAttachments: React.Dispatch<React.SetStateAction<FileAttachment[]>>;
+  onStartVoice?: (config?: VoiceSessionConfig) => void;
 }
 
 // --- CHAT MESSAGE COMPONENT ---
@@ -117,7 +118,7 @@ const ChatMessageBubble: React.FC<{ msg: Message }> = ({ msg }) => {
   );
 };
 
-export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachments }) => {
+export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachments, onStartVoice }) => {
   const { setSubject } = useActivity();
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -226,7 +227,7 @@ export const ChatTutor: React.FC<ChatTutorProps> = ({ attachments, setAttachment
             size="sm" 
             className="bg-gradient-to-r from-rose-500 to-orange-500 border-0 hover:from-rose-600 hover:to-orange-600 text-white shadow-md"
             icon={<Mic size={16} />} 
-            onClick={() => setIsVoiceMode(true)}
+            onClick={() => onStartVoice ? onStartVoice() : setIsVoiceMode(true)}
           >
             Live Voice
           </Button>

@@ -23,6 +23,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { MusicPlayer } from './MusicPlayer';
 import { NotificationCenter } from './NotificationCenter';
+import { VoiceSessionConfig } from '../types';
 
 export function Layout({
     children,
@@ -33,7 +34,7 @@ export function Layout({
     children?: React.ReactNode,
     theme: string,
     toggleTheme: () => void,
-    onStartVoice: () => void
+    onStartVoice: (config?: VoiceSessionConfig) => void
 }) {
     const { logout } = useAuth();
     const { profile } = useProfile();

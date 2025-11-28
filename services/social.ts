@@ -55,6 +55,25 @@ export interface MoodBoardLayout {
     updatedAt: number;
 }
 
+// Mood board item with transforms and sticker support
+export type MoodBoardItemKind = 'post' | 'sticker';
+
+export interface MoodBoardItem {
+    id: string; // postId for posts, generated id for stickers
+    kind: MoodBoardItemKind;
+    postId?: string; // Only for kind='post'
+    // Sticker-specific fields
+    assetUrl?: string; // URL or data URL for sticker image
+    alt?: string; // Fallback description for sticker
+    // Transform fields
+    x: number;
+    y: number;
+    rotation: number; // degrees, -30 to 30
+    scale: number; // 0.5 to 2
+    zIndex: number;
+    isFeatured?: boolean;
+}
+
 export interface UserProfile {
     uid: string;
     displayName: string;
@@ -82,15 +101,7 @@ export interface UserProfile {
     hasCompletedOnboarding?: boolean;
     moodBoardLayout?: MoodBoardLayout;
     moodBoardConfig?: {
-        posts: {
-            postId: string;
-            x: number;
-            y: number;
-            rotation: number;
-            scale: number;
-            zIndex: number;
-            isFeatured?: boolean;
-        }[];
+        posts: MoodBoardItem[];
         panelOffset?: { x: number; y: number };
     };
 }

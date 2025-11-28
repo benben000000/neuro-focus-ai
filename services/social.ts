@@ -60,6 +60,8 @@ export interface BoardStyle {
     backgroundTexture?: 'none' | 'paper' | 'gradient' | 'dotted';
     showGrid?: boolean;
     noiseLevel?: number; // 0-100
+}
+
 // Mood board item with transforms and sticker support
 export type MoodBoardItemKind = 'post' | 'sticker';
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { useActivity } from '../contexts/ActivityContext';
+import { useOnboarding } from '../contexts/OnboardingContext';
 import { updateUserProfile, SocialPost, subscribeToUserPosts, deletePost, fetchSavedPosts, toggleSavePost, isPostSaved, setVerifiedBadge, searchUsers, UserProfile, saveMoodBoardLayout, mergeMoodBoardLayout, MoodBoardLayout, subscribeToPresence, UserPresence, BoardStyle, getDefaultBoardStyle, generateTexturePattern } from '../services/social';
 import { formatTime } from '../services/learning';
 import type { UserProgress } from '../types';
@@ -220,6 +221,7 @@ export function Profile() {
     const { currentUser } = useAuth();
     const { profile, loading: profileLoading, refreshProfile } = useProfile();
     const { stats: progressSummary } = useActivity();
+    const { resetTutorial } = useOnboarding();
     const [isEditing, setIsEditing] = useState(false);
     const [editName, setEditName] = useState('');
     const [editUsername, setEditUsername] = useState('');
@@ -1041,24 +1043,34 @@ export function Profile() {
                         <LevelSummary level={profile?.level || 1} xp={profile?.xp || 0} />
                     </div>
 
-                    <button
-                        onClick={() => (isEditing ? handleSave() : handleEditClick())}
-                        disabled={isSaveDisabled}
-                        className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors ${isEditing
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                            }`}
-                    >
-                        {isEditing ? (
-                            saveLoading ? (
-                                <>Saving...</>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={() => (isEditing ? handleSave() : handleEditClick())}
+                            disabled={isSaveDisabled}
+                            className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors ${isEditing
+                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                }`}
+                        >
+                            {isEditing ? (
+                                saveLoading ? (
+                                    <>Saving...</>
+                                ) : (
+                                    <><Save size={18} /> Save Changes</>
+                                )
                             ) : (
-                                <><Save size={18} /> Save Changes</>
-                            )
-                        ) : (
-                            <><Edit2 size={18} /> Edit Profile</>
+                                <><Edit2 size={18} /> Edit Profile</>
+                            )}
+                        </button>
+                        {!isEditing && (
+                            <button
+                                onClick={resetTutorial}
+                                className="px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition-colors bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 text-sm"
+                            >
+                                <Sparkles size={16} /> Replay Tutorial
+                            </button>
                         )}
-                    </button>
+                    </div>
                 </div>
 
                 {/* Collage banner & quick stats */}
@@ -1362,48 +1374,7 @@ export function Profile() {
                                         />
                                     );
                                 })}
-                    <div className="relative min-h-[500px] h-[600px] bg-slate-50 dark:bg-slate-900 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 touch-none">
-                        <div 
-                            className="absolute inset-0 cursor-grab active:cursor-grabbing"
-                            style={{ 
-                                backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)', 
-                                backgroundSize: '20px 20px',
-                                backgroundPosition: `${panelOffset.x}px ${panelOffset.y}px`
-                            }}
-                            onPointerDown={handleBoardPointerDown}
-                            onPointerMove={handleBoardPointerMove}
-                            onPointerUp={handleBoardPointerUp}
-                            onClick={() => setSelectedItemId(null)}
-                        />
-                        
-                        <div style={{ transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)` }}>
-                            {moodBoardPosts.map(config => {
-                                const post = config.kind === 'post' && config.postId ? userPosts.find(p => p.id === config.postId) : null;
-                                
-                                // Filter logic for posts
-                                if (config.kind === 'post' && activeFilter !== 'all' && !filteredPosts.find(p => p.id === config.postId)) return null;
-
-                                return (
-                                    <DraggablePostCard
-                                        key={config.id}
-                                        post={post}
-                                        config={config}
-                                        isOwner={currentUser?.uid === profile?.uid}
-                                        onUpdate={handlePostUpdate}
-                                        onInteract={() => {
-                                             if (config.kind === 'post' && config.postId) {
-                                                 const idx = filteredPosts.findIndex(p => p.id === config.postId);
-                                                 if (idx !== -1) openPostViewer(idx);
-                                             }
-                                        }}
-                                        maxZ={Math.max(...moodBoardPosts.map(p => p.zIndex), 0)}
-                                        onBringToFront={() => handleBringToFront(config.id)}
-                                        isSelected={selectedItemId === config.id}
-                                        onSelect={(selected) => setSelectedItemId(selected ? config.id : null)}
-                                    />
-                                );
-                            })}
-                        </div>
+                            </div>
                         
                         {currentUser?.uid === profile?.uid && (
                             <div className="absolute top-4 left-4 right-4 z-20 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1473,27 +1444,19 @@ export function Profile() {
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Drag posts to arrange. Click to select, then use controls above.</p>
                                 </div>
                             </div>
+                        )}
                             
-                            {currentUser?.uid === profile?.uid && (
-                                <div className="absolute top-4 right-4 z-10 flex gap-2">
-                                    <button
-                                        onClick={saveMoodBoard}
-                                        disabled={saveLoading}
-                                        className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
-                                    >
-                                        <Save size={14} /> Save Board
-                                    </button>
-                                </div>
-                            )}
-
-                            {currentUser?.uid === profile?.uid && moodBoardPosts.length > 0 && !profile?.moodBoardConfig && (
-                                <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
-                                    <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur px-4 py-3 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-                                        <p className="font-bold text-sm">Mood Board Mode</p>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Drag posts to arrange. Tap star to feature.</p>
-                                    </div>
-                                </div>
-                            )}
+                        {currentUser?.uid === profile?.uid && (
+                            <div className="absolute top-4 right-4 z-10 flex gap-2">
+                                <button
+                                    onClick={saveMoodBoard}
+                                    disabled={saveLoading}
+                                    className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:scale-105 transition-transform flex items-center gap-2"
+                                >
+                                    <Save size={14} /> Save Board
+                                </button>
+                            </div>
+                        )}
                         </div>
                     </div>
                 ) : loadingSaved ? (

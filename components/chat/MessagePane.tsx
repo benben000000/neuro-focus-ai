@@ -1,15 +1,22 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Send, Paperclip, Smile, MoreVertical, Hash, AtSign, Loader2, BookOpen, BarChart2, Volume2, Plus } from 'lucide-react';
+import { Send, Smile, MoreVertical, Hash, AtSign, Loader2, BookOpen, BarChart2, Volume2, Plus } from 'lucide-react';
 import { GroupMessage } from '../../services/groups';
 import { UserProfile } from '../../services/social';
+import { ConversationNode, ConversationType } from '../../types';
 
 interface MessagePaneProps {
-    channelName: string;
-    channelType?: 'text' | 'voice' | 'dm';
+    channelName?: string;
+    channelType?: ConversationType | 'text' | 'voice' | 'dm';
     messages: GroupMessage[] | any[]; // any for DM compatibility if needed
     onSendMessage: (content: string) => void;
     currentUser: UserProfile | null;
     isLoading?: boolean;
+    conversation?: ConversationNode; // unified conversation metadata
+    isSending?: boolean;
+    newMessage?: string;
+    setNewMessage?: (msg: string) => void;
+    onKeyPress?: (e: React.KeyboardEvent) => void;
+    messagesEndRef?: React.RefObject<HTMLDivElement>;
 }
 
 export const MessagePane: React.FC<MessagePaneProps> = ({
@@ -18,20 +25,42 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
     messages,
     onSendMessage,
     currentUser,
-    isLoading
+    isLoading,
+    conversation,
+    isSending = false,
+    newMessage = '',
+    setNewMessage,
+    onKeyPress,
+    messagesEndRef: propsMessagesEndRef
 }) => {
-    const [newMessage, setNewMessage] = useState('');
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [localNewMessageState, setLocalNewMessageState] = useState('');
+    const localMessagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Use provided props or local state
+    const effectiveNewMessage = newMessage !== undefined ? newMessage : localNewMessageState;
+    const effectiveSetNewMessage = setNewMessage || setLocalNewMessageState;
+    const effectiveMessagesEndRef = propsMessagesEndRef || localMessagesEndRef;
+    const effectiveChannelType = conversation?.type || (channelType as any);
+    const effectiveChannelName = conversation?.label || channelName || 'Chat';
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        effectiveMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, effectiveMessagesEndRef]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (newMessage.trim()) {
-            onSendMessage(newMessage);
-            setNewMessage('');
+        if (effectiveNewMessage.trim()) {
+            onSendMessage(effectiveNewMessage);
+            effectiveSetNewMessage('');
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (onKeyPress) {
+            onKeyPress(e);
+        } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSubmit(e as any);
         }
     };
 
@@ -40,10 +69,10 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
             {/* Header */}
             <div className="h-12 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm flex-shrink-0">
                 <div className="flex items-center gap-2">
-                    {channelType === 'text' && <Hash size={20} className="text-slate-400" />}
-                    {channelType === 'voice' && <Volume2 size={20} className="text-slate-400" />}
-                    {channelType === 'dm' && <AtSign size={20} className="text-slate-400" />}
-                    <h3 className="font-bold text-slate-900 dark:text-white">{channelName}</h3>
+                    {(effectiveChannelType === 'text' || effectiveChannelType === 'group-text') && <Hash size={20} className="text-slate-400" />}
+                    {(effectiveChannelType === 'voice' || effectiveChannelType === 'group-voice') && <Volume2 size={20} className="text-slate-400" />}
+                    {effectiveChannelType === 'dm' && <AtSign size={20} className="text-slate-400" />}
+                    <h3 className="font-bold text-slate-900 dark:text-white">{effectiveChannelName}</h3>
                 </div>
                 <div className="flex items-center gap-4">
                     {/* Placeholder for toolbar */}
@@ -57,13 +86,15 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {messages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-50">
-                        <Hash size={48} className="mb-2" />
-                        <p>Welcome to #{channelName}!</p>
-                        <p className="text-sm">This is the start of the channel.</p>
+                        {(effectiveChannelType === 'text' || effectiveChannelType === 'group-text') && <Hash size={48} className="mb-2" />}
+                        {(effectiveChannelType === 'voice' || effectiveChannelType === 'group-voice') && <Volume2 size={48} className="mb-2" />}
+                        {effectiveChannelType === 'dm' && <AtSign size={48} className="mb-2" />}
+                        <p>Welcome to {effectiveChannelType === 'dm' ? '@' : '#'}{effectiveChannelName}!</p>
+                        <p className="text-sm">This is the start of the conversation.</p>
                     </div>
                 )}
                 
-                {messages.map((msg, index) => {
+                {messages.map((msg: any, index: number) => {
                     const showHeader = index === 0 || messages[index - 1].senderId !== msg.senderId || (msg.createdAt - messages[index-1].createdAt > 60000 * 5);
                     
                     return (
@@ -102,8 +133,8 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
                         </div>
                     );
                 })}
-                <div ref={messagesEndRef} />
-            </div>
+                <div ref={effectiveMessagesEndRef} />
+                </div>
 
             {/* Input Area */}
             <div className="p-4 bg-white dark:bg-slate-900 flex-shrink-0">
@@ -115,22 +146,23 @@ export const MessagePane: React.FC<MessagePaneProps> = ({
                          </button>
                          <input
                             type="text"
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder={`Message #${channelName}`}
+                            value={effectiveNewMessage}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => effectiveSetNewMessage(e.target.value)}
+                            onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => handleKeyDown(e as any)}
+                            placeholder={`Message ${effectiveChannelType === 'dm' ? '@' : '#'}${effectiveChannelName}`}
                             className="flex-1 bg-transparent border-none outline-none text-slate-900 dark:text-white px-2 py-1 placeholder-slate-500"
-                            disabled={isLoading}
+                            disabled={isLoading || isSending}
                         />
                          <button type="button" className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                             <Smile size={20} />
                          </button>
-                        {newMessage.trim() && (
+                        {effectiveNewMessage.trim() && (
                             <button
                                 type="submit"
-                                disabled={isLoading}
+                                disabled={isLoading || isSending}
                                 className="p-2 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 transition-colors"
                             >
-                                {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                                {isSending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                             </button>
                         )}
                      </form>

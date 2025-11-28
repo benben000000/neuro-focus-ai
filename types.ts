@@ -157,3 +157,22 @@ export interface DailyPhrase {
 export interface VoiceSessionConfig {
   targetLanguage?: string;
 }
+
+// --- UNIFIED CHAT TYPES ---
+
+export type ConversationType = 'dm' | 'group-text' | 'group-voice';
+
+export interface ConversationNode {
+  id: string;
+  type: ConversationType;
+  label: string; // display name (user name or channel name)
+  subtitle?: string | undefined; // online status, last message, etc.
+  avatar?: string | undefined; // user photo or group icon
+  groupId?: string | undefined; // set only for group channels
+  channelId?: string | undefined; // set only for text/voice channels
+  isUnread?: boolean | undefined;
+  unreadCount?: number | undefined;
+  lastMessage?: string | undefined;
+  lastMessageTime?: number | undefined;
+  participants?: string[] | undefined; // for DMs
+}
